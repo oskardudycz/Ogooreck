@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -9,29 +10,51 @@ public static class ApiSpecification
     ///////////////////
     ////   GIVEN   ////
     ///////////////////
+    public static Func<HttpRequestMessage, HttpRequestMessage> URI(string uri) =>
+        URI(new Uri(uri, UriKind.RelativeOrAbsolute));
 
-    public static Func<string> URL(string url) => () => url;
+    public static Func<HttpRequestMessage, HttpRequestMessage> URI(Uri uri) =>
+        request =>
+        {
+            request.RequestUri = uri;
+            return request;
+        };
+
+    public static Func<HttpRequestMessage, HttpRequestMessage> BODY<T>(T body) =>
+        request =>
+        {
+            request.Content = JsonContent.Create(body);
+
+            return request;
+        };
 
     ///////////////////
     ////   WHEN    ////
     ///////////////////
+    public static Func<HttpClient, HttpRequestMessage, Task<HttpResponseMessage>> GET = SEND(HttpMethod.Post);
 
-    public static Func<HttpClient, string, Task<HttpResponseMessage>> GET() => GET("");
+    public static Func<HttpClient, HttpRequestMessage, Task<HttpResponseMessage>> POST = SEND(HttpMethod.Post);
 
-    public static Func<HttpClient, string, Task<HttpResponseMessage>> GET(string urlSuffix) =>
-        (api, request) => api.GetAsync($"{request}/{urlSuffix}");
+    public static Func<HttpClient, HttpRequestMessage, Task<HttpResponseMessage>> PUT = SEND(HttpMethod.Put);
+
+    public static Func<HttpClient, HttpRequestMessage, Task<HttpResponseMessage>> DELETE = SEND(HttpMethod.Delete);
+
+    public static Func<HttpClient, HttpRequestMessage, Task<HttpResponseMessage>> SEND(HttpMethod httpMethod) =>
+        (api, request) =>
+        {
+            request.Method = httpMethod;
+            return api.SendAsync(request);
+        };
 
     ///////////////////
     ////   THEN    ////
     ///////////////////
+    public static Action<HttpResponseMessage> OK = HTTP_STATUS(HttpStatusCode.OK);
 
-    public static Action<HttpResponseMessage> OK() => AssertResponseStatus(HttpStatusCode.OK);
-
-    public static Action<HttpResponseMessage> CREATED(string apiPrefix) =>
+    public static Action<HttpResponseMessage> CREATED =>
         response =>
         {
-            //response.RequestMessage.RequestUri.AbsolutePath
-            AssertResponseStatus(HttpStatusCode.Created);
+            HTTP_STATUS(HttpStatusCode.Created);
 
             var locationHeader = response.Headers.Location;
 
@@ -39,24 +62,17 @@ public static class ApiSpecification
 
             var location = locationHeader!.OriginalString;
 
-            location.Should().StartWith(apiPrefix);
-            //assertDoesNotThrow(() => UUID.fromString(location.substring(apiPrefix.length() + 1)));
+            location.Should().StartWith(response.RequestMessage!.RequestUri!.AbsolutePath);
         };
 
-    // public Action<HttpResponseMessage> BAD_REQUEST = AssertResponseStatus(HttpStatus.BAD_REQUEST);
-    //
-    // public Action<HttpResponseMessage> NOT_FOUND = AssertResponseStatus(HttpStatus.NOT_FOUND);
-    //
-    // public Action<HttpResponseMessage> CONFLICT = AssertResponseStatus(HttpStatus.CONFLICT);
-    //
-    // public Action<HttpResponseMessage> PRECONDITION_FAILED = AssertResponseStatus(HttpStatus.PRECONDITION_FAILED);
-    //
-    // public Action<HttpResponseMessage> METHOD_NOT_ALLOWED = AssertResponseStatus(HttpStatus.METHOD_NOT_ALLOWED);
+    public static Action<HttpResponseMessage> BAD_REQUEST = HTTP_STATUS(HttpStatusCode.BadRequest);
+    public static Action<HttpResponseMessage> NOT_FOUND = HTTP_STATUS(HttpStatusCode.NotFound);
+    public static Action<HttpResponseMessage> CONFLICT = HTTP_STATUS(HttpStatusCode.Conflict);
+    public static Action<HttpResponseMessage> PRECONDITION_FAILED = HTTP_STATUS(HttpStatusCode.PreconditionFailed);
+    public static Action<HttpResponseMessage> METHOD_NOT_ALLOWED = HTTP_STATUS(HttpStatusCode.MethodNotAllowed);
 
-    public static Action<HttpResponseMessage> AssertResponseStatus(HttpStatusCode status)
-    {
-        return response => response.StatusCode.Should().Be(status);
-    }
+    public static Action<HttpResponseMessage> HTTP_STATUS(HttpStatusCode status) =>
+        response => response.StatusCode.Should().Be(status);
 }
 
 public class ApiSpecification<TProgram>: IDisposable where TProgram : class
@@ -64,86 +80,29 @@ public class ApiSpecification<TProgram>: IDisposable where TProgram : class
     private readonly WebApplicationFactory<TProgram> applicationFactory;
     private readonly HttpClient client;
 
-    public ApiSpecification()
+    public ApiSpecification(): this(new WebApplicationFactory<TProgram>())
     {
-        applicationFactory = new WebApplicationFactory<TProgram>();
+    }
+
+    public ApiSpecification(WebApplicationFactory<TProgram> applicationFactory)
+    {
+        this.applicationFactory = applicationFactory;
         client = applicationFactory.CreateClient();
     }
 
-    public GivenApiSpecificationBuilder<TRequest> Given<TRequest>(Func<TRequest> define)
+    public GivenApiSpecificationBuilder<HttpRequestMessage> Given(
+        params Func<HttpRequestMessage, HttpRequestMessage>[] builders)
     {
-        return new GivenApiSpecificationBuilder<TRequest>(client, define);
-    }
+        var define = () => new HttpRequestMessage();
 
-    // public Func<HttpClient, object, ResponseEntity> POST = POST("");
-    //
-    // public Func<HttpClient, object, ResponseEntity> POST(string urlSuffix) {
-    //   return (api, request) => this.restTemplate
-    //     .postForEntity(getApiUrl() + urlSuffix, request, Void.class);
-    // }
-    //
-    // public Func<HttpClient, object, ResponseEntity> POST(string urlSuffix, ETag eTag) {
-    //   return (api, request) => this.restTemplate
-    //     .postForEntity(
-    //       getApiUrl() + urlSuffix,
-    //       new HttpEntity<>(request, getIfMatchHeader(eTag)),
-    //       Void.class
-    //     );
-    // }
-    //
-    // public Func<HttpClient, object, ResponseEntity> PUT(ETag eTag) {
-    //   return PUT("", eTag);
-    // }
-    //
-    // public Func<HttpClient, object, ResponseEntity> PUT(string urlSuffix, ETag eTag) {
-    //   return PUT(urlSuffix, eTag, true);
-    // }
-    //
-    // public Func<HttpClient, object, ResponseEntity> PUT(string urlSuffix, ETag eTag, boolean withEmptyBody) {
-    //   return (api, request) => this.restTemplate
-    //     .exchange(
-    //       getApiUrl() + urlSuffix + (withEmptyBody ? request : ""),
-    //       HttpMethod.PUT,
-    //       new HttpEntity<>(!withEmptyBody ? request : null, getIfMatchHeader(eTag)),
-    //       Void.class
-    //     );
-    // }
-    //
-    // public Func<HttpClient, object, ResponseEntity> DELETE(ETag eTag) {
-    //   return DELETE("", eTag);
-    // }
-    //
-    // public Func<HttpClient, object, ResponseEntity> DELETE(string urlSuffix, ETag eTag) {
-    //   return (api, request) => this.restTemplate
-    //     .exchange(
-    //       getApiUrl() + urlSuffix + request,
-    //       HttpMethod.DELETE,
-    //       new HttpEntity<>(null, getIfMatchHeader(eTag)),
-    //       Void.class
-    //     );
-    // }
-    //
-    // HttpHeaders getHeaders(Consumer<HttpHeaders> consumer) {
-    //   var headers = new HttpHeaders();
-    //
-    //   headers.setContentType(MediaType.APPLICATION_JSON);
-    //   consumer.accept(headers);
-    //
-    //   return headers;
-    // }
-    //
-    // HttpHeaders getIfMatchHeader(ETag eTag) {
-    //   return getHeaders(headers => headers.setIfMatch(eTag.value()));
-    // }
-    //
-    // HttpHeaders getIfNoneMatchHeader(ETag eTag) {
-    //   return getHeaders(headers => {
-    //     if (eTag != null)
-    //       headers.setIfNoneMatch(eTag.value());
-    //   });
-    // }
-    //
-    //
+        foreach (var current in builders)
+        {
+            var previous = define;
+            define = () => current(previous());
+        }
+
+        return new GivenApiSpecificationBuilder<HttpRequestMessage>(client, define);
+    }
 
     /////////////////////
     ////   BUILDER   ////

@@ -1,23 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-<PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-</PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+    </PropertyGroup>
 
-<ItemGroup>
-    <PackageReference Include="FluentAssertions" Version="6.6.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
-    <PackageReference Include="xunit" Version="2.4.1" />
-    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="6.0.4" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">
-        <PrivateAssets>all</PrivateAssets>
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-</ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="FluentAssertions" Version="6.6.0" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
+        <PackageReference Include="xunit" Version="2.4.1" />
+        <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="6.0.4" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
 
-<ItemGroup>
-    <ProjectReference Include="..\Ogooreck.Sample.Api\Ogooreck.Sample.Api.csproj" />
-    <ProjectReference Include="..\Ogooreck\Ogooreck.csproj" />
-</ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Ogooreck.Sample.Api\Ogooreck.Sample.Api.csproj" />
+        <ProjectReference Include="..\Ogooreck\Ogooreck.csproj" />
+    </ItemGroup>
+
+
+    <ItemGroup>
+        <PackageReference Include="MarkdownSnippets.MsBuild" Version="24.2.2">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
 
 </Project>
