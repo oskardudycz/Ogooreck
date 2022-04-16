@@ -9,6 +9,22 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{F617812B-14C9-45AB-BDE1-5CDA13C339FA}"
 	ProjectSection(SolutionItems) = preProject
 		Directory.Build.props = Directory.Build.props
+		..\build.cmd = ..\build.cmd
+		..\build.ps1 = ..\build.ps1
+		..\build.sh = ..\build.sh
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{30269866-4EC5-46FE-8822-35E70583FFE9}"
+	ProjectSection(SolutionItems) = preProject
+		..\mdsnippets.json = ..\mdsnippets.json
+		..\README.md = ..\README.md
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ogooreck.Build", "Ogooreck.Build\Ogooreck.Build.csproj", "{5D676ACB-C70F-447A-94AF-4547889CA100}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "mdsource", "mdsource", "{2BA9001A-3DA6-4588-A192-6127114E1495}"
+	ProjectSection(SolutionItems) = preProject
+		..\mdsource\README.source.md = ..\mdsource\README.source.md
 	EndProjectSection
 EndProject
 Global
@@ -29,5 +45,13 @@ Global
 		{1A428941-1D1B-4C36-96EF-CAF1B991C76D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1A428941-1D1B-4C36-96EF-CAF1B991C76D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1A428941-1D1B-4C36-96EF-CAF1B991C76D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5D676ACB-C70F-447A-94AF-4547889CA100}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5D676ACB-C70F-447A-94AF-4547889CA100}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5D676ACB-C70F-447A-94AF-4547889CA100}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5D676ACB-C70F-447A-94AF-4547889CA100}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{5D676ACB-C70F-447A-94AF-4547889CA100} = {F617812B-14C9-45AB-BDE1-5CDA13C339FA}
+		{2BA9001A-3DA6-4588-A192-6127114E1495} = {30269866-4EC5-46FE-8822-35E70583FFE9}
 	EndGlobalSection
 EndGlobal

@@ -1,0 +1,11 @@
+{
+    "$schema": "https://raw.githubusercontent.com/SimonCropp/MarkdownSnippets/master/schema.json",
+    "ReadOnly": true,
+    "TocLevel": 3,
+    "Convention": "SourceTransform",
+    "MaxWidth": 80,
+    "TreatMissingAsWarning": true,
+    "ValidateContent": true,
+    "OmitSnippetLinks": false,
+    "WriteHeader": false
+}
