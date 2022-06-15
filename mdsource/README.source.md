@@ -10,6 +10,8 @@ Main assumptions:
 - write tests seamlessly,
 - make them readable,
 - cut needed boilerplate by the set of helpful extensions and wrappers,
+- don't create a full-blown BDD framework,
+- no Domain-Specific Language,
 - don't replace testing frameworks (works with all, so XUnit, NUnit, MSTests, etc.),
 - testing frameworks and assert library agnostic,
 - keep things simple, but allow compositions and extension.
@@ -21,6 +23,8 @@ TODO:
 - Aggregate Tests,
 - Event Sourcing tests,
 - Others.
+
+Check also [introduction post on my blog](https://event-driven.io/en/ogooreck_sneaky_bdd_testing_framework/).
 
 ## Support
 
@@ -65,7 +69,7 @@ public Task POST_CreatesNewMeeting() =>
 You can also specify headers, e.g. `IF_MATCH` to perform an optimistic concurrency check.
 
 ```csharp
- public Task PUT_ConfirmsShoppingCart() =>
+public Task PUT_ConfirmsShoppingCart() =>
     API.Given(
             URI($"/api/ShoppingCarts/{API.ShoppingCartId}/confirmation"),
             HEADERS(IF_MATCH(1))
@@ -79,7 +83,7 @@ You can also specify headers, e.g. `IF_MATCH` to perform an optimistic concurren
 You can also do response body assertions, to, e.g. out of the box check if the response body is equivalent to the expected one:
 
 ```csharp
-public Task GET_ReturnsShoppingCartDetails()
+public Task GET_ReturnsShoppingCartDetails() =>
     API.Given(
             URI($"/api/ShoppingCarts/{API.ShoppingCartId}")
         )
@@ -101,7 +105,7 @@ You can also use `GET_UNTIL` helper to check API that has eventual consistency.
 You can use various conditions, e.g. `RESPONSE_SUCCEEDED` waits until a response has one of the 2xx statuses. That's useful for new resource creation scenarios.
 
 ```csharp
-public Task GET_ReturnsShoppingCartDetails()
+public Task GET_ReturnsShoppingCartDetails() =>
     API.Given(
             URI($"/api/ShoppingCarts/{API.ShoppingCartId}")
         )
@@ -183,7 +187,7 @@ Ogooreck supports various ways of composing the API, e.g.
 **Classic Async/Await**
 
 ```csharp
-public async Task POST_WithExistingSKU_ReturnsConflictStatus()
+public async Task POST_WithExistingSKU_ReturnsConflictStatus() =>
 {
     // Given
     var request = new RegisterProductRequest("AA2039485", ValidName, ValidDescription);
@@ -232,85 +236,85 @@ public Task SendPackage_ShouldReturn_CreatedStatus_With_PackageId() =>
 
 ```csharp
 public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
-    {
-        var createdReservationId = Guid.Empty;
+{
+    var createdReservationId = Guid.Empty;
 
-        await API.Scenario(
-            // Create Reservations
-            API.Given(
-                    URI("/api/Reservations/"),
-                    BODY(new CreateTentativeReservationRequest { SeatId = SeatId })
-                )
-                .When(POST)
-                .Then(CREATED,
-                    response =>
-                    {
-                        createdReservationId = response.GetCreatedId<Guid>();
-                        return ValueTask.CompletedTask;
-                    }),
+    await API.Scenario(
+        // Create Reservations
+        API.Given(
+                URI("/api/Reservations/"),
+                BODY(new CreateTentativeReservationRequest { SeatId = SeatId })
+            )
+            .When(POST)
+            .Then(CREATED,
+                response =>
+                {
+                    createdReservationId = response.GetCreatedId<Guid>();
+                    return ValueTask.CompletedTask;
+                }),
 
-            // Get reservation details
-            _ => API.Given(
-                    URI($"/api/Reservations/{createdReservationId}")
-                )
-                .When(GET)
-                .Then(
-                    OK,
-                    RESPONSE_BODY<ReservationDetails>(reservation =>
-                    {
-                        reservation.Id.Should().Be(createdReservationId);
-                        reservation.Status.Should().Be(ReservationStatus.Tentative);
-                        reservation.SeatId.Should().Be(SeatId);
-                        reservation.Number.Should().NotBeEmpty();
-                        reservation.Version.Should().Be(1);
-                    })),
+        // Get reservation details
+        _ => API.Given(
+                URI($"/api/Reservations/{createdReservationId}")
+            )
+            .When(GET)
+            .Then(
+                OK,
+                RESPONSE_BODY<ReservationDetails>(reservation =>
+                {
+                    reservation.Id.Should().Be(createdReservationId);
+                    reservation.Status.Should().Be(ReservationStatus.Tentative);
+                    reservation.SeatId.Should().Be(SeatId);
+                    reservation.Number.Should().NotBeEmpty();
+                    reservation.Version.Should().Be(1);
+                })),
 
-            // Get reservations list
-            _ => API.Given(
-                    URI("/api/Reservations/")
-                )
-                .When(GET)
-                .Then(
-                    OK,
-                    RESPONSE_BODY<PagedListResponse<ReservationShortInfo>>(reservations =>
-                    {
-                        reservations.Should().NotBeNull();
-                        reservations.Items.Should().NotBeNull();
+        // Get reservations list
+        _ => API.Given(
+                URI("/api/Reservations/")
+            )
+            .When(GET)
+            .Then(
+                OK,
+                RESPONSE_BODY<PagedListResponse<ReservationShortInfo>>(reservations =>
+                {
+                    reservations.Should().NotBeNull();
+                    reservations.Items.Should().NotBeNull();
 
-                        reservations.Items.Should().HaveCount(1);
-                        reservations.TotalItemCount.Should().Be(1);
-                        reservations.HasNextPage.Should().Be(false);
+                    reservations.Items.Should().HaveCount(1);
+                    reservations.TotalItemCount.Should().Be(1);
+                    reservations.HasNextPage.Should().Be(false);
 
-                        var reservationInfo = reservations.Items.Single();
+                    var reservationInfo = reservations.Items.Single();
 
-                        reservationInfo.Id.Should().Be(createdReservationId);
-                        reservationInfo.Number.Should().NotBeNull().And.NotBeEmpty();
-                        reservationInfo.Status.Should().Be(ReservationStatus.Tentative);
-                    })),
+                    reservationInfo.Id.Should().Be(createdReservationId);
+                    reservationInfo.Number.Should().NotBeNull().And.NotBeEmpty();
+                    reservationInfo.Status.Should().Be(ReservationStatus.Tentative);
+                })),
 
-            // Get reservation history
-            _ => API.Given(
-                    URI($"/api/Reservations/{createdReservationId}/history")
-                )
-                .When(GET)
-                .Then(
-                    OK,
-                    RESPONSE_BODY<PagedListResponse<ReservationHistory>>(reservations =>
-                    {
-                        reservations.Should().NotBeNull();
-                        reservations.Items.Should().NotBeNull();
+        // Get reservation history
+        _ => API.Given(
+                URI($"/api/Reservations/{createdReservationId}/history")
+            )
+            .When(GET)
+            .Then(
+                OK,
+                RESPONSE_BODY<PagedListResponse<ReservationHistory>>(reservations =>
+                {
+                    reservations.Should().NotBeNull();
+                    reservations.Items.Should().NotBeNull();
 
-                        reservations.Items.Should().HaveCount(1);
-                        reservations.TotalItemCount.Should().Be(1);
-                        reservations.HasNextPage.Should().Be(false);
+                    reservations.Items.Should().HaveCount(1);
+                    reservations.TotalItemCount.Should().Be(1);
+                    reservations.HasNextPage.Should().Be(false);
 
-                        var reservationInfo = reservations.Items.Single();
+                    var reservationInfo = reservations.Items.Single();
 
-                        reservationInfo.ReservationId.Should().Be(createdReservationId);
-                        reservationInfo.Description.Should().StartWith("Created tentative reservation with number");
-                    }))
-        );
-    }
+                    reservationInfo.ReservationId.Should().Be(createdReservationId);
+                    reservationInfo.Description.Should().StartWith("Created tentative reservation with number");
+                }))
+    );
+}
 ```
 
 ### XUnit setup
@@ -327,7 +331,6 @@ public class CreateMeetingTests: IClassFixture<ApiSpecification<Program>>
     public CreateMeetingTests(ApiSpecification<Program> api) => API = api;
 
     [Fact]
-    [Trait("Category", "Acceptance")]
     public Task CreateCommand_ShouldPublish_MeetingCreateEvent() =>
         API.Given(
                 URI("/api/meetings/),
@@ -373,7 +376,6 @@ public class CancelShoppingCartTests: IClassFixture<CancelShoppingCartFixture>
     public CancelShoppingCartTests(CancelShoppingCartFixture api) => API = api;
 
     [Fact]
-    [Trait("Category", "Acceptance")]
     public async Task Delete_Should_Return_OK_And_Cancel_Shopping_Cart() => 
         API.Given(
                 URI($"/api/ShoppingCarts/{API.ShoppingCartId}"),
