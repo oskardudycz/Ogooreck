@@ -5,7 +5,7 @@
     "Convention": "SourceTransform",
     "MaxWidth": 80,
     "TreatMissingAsWarning": true,
-    "ValidateContent": true,
+    "ValidateContent": false,
     "OmitSnippetLinks": false,
     "WriteHeader": false
 }
