@@ -12,6 +12,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{F617812B
 		..\build.cmd = ..\build.cmd
 		..\build.ps1 = ..\build.ps1
 		..\build.sh = ..\build.sh
+		..\.github\workflows\build.dotnet.yml = ..\.github\workflows\build.dotnet.yml
+		..\.github\workflows\publish-nuget.yml = ..\.github\workflows\publish-nuget.yml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{30269866-4EC5-46FE-8822-35E70583FFE9}"
