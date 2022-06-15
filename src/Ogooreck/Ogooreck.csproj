@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <VersionPrefix>0.1.1</VersionPrefix>
         <TargetFramework>net6.0</TargetFramework>
         <GenerateAssemblyTitleAttribute>true</GenerateAssemblyTitleAttribute>
         <GenerateAssemblyDescriptionAttribute>true</GenerateAssemblyDescriptionAttribute>
@@ -10,7 +11,6 @@
         <GenerateAssemblyFileVersionAttribute>true</GenerateAssemblyFileVersionAttribute>
         <GenerateAssemblyInformationalVersionAttribute>true</GenerateAssemblyInformationalVersionAttribute>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <VersionPrefix>0.1.0</VersionPrefix>
         <LangVersion>10.0</LangVersion>
         <Authors>Oskar Dudycz</Authors>
 <!--        <PackageIconUrl>https://github.com/oskardudycz/Ogooreck/content/images/emblem.png</PackageIconUrl>-->
@@ -29,6 +29,7 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="6.0.6" />
         <PackageReference Include="FluentAssertions" Version="6.7.0" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     </ItemGroup>
 
 </Project>

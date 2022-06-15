@@ -2,9 +2,12 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using Ogooreck.Newtonsoft;
+using JsonSerializer = System.Text.Json.JsonSerializer;
+
 #pragma warning disable CS1591
 
 namespace Ogooreck.API;
@@ -408,14 +411,14 @@ public static class HttpResponseMessageExtensions
         response.GetCreatedId<string>();
 
 
-    public static async Task<T> GetResultFromJson<T>(this HttpResponseMessage response)
+    public static async Task<T> GetResultFromJson<T>(this HttpResponseMessage response, JsonSerializerSettings? settings = null)
     {
         var result = await response.Content.ReadAsStringAsync();
 
         result.Should().NotBeNull();
         result.Should().NotBeEmpty();
 
-        var deserialised = JsonSerializer.Deserialize<T>(result)!;
+        var deserialised = result.FromJson<T>(settings);
 
         deserialised.Should().NotBeNull();
 
