@@ -8,7 +8,7 @@ Main assumptions:
 - cut needed boilerplate by the set of helpful extensions and wrappers,
 - don't replace testing frameworks (works with all, so XUnit, NUnit, MSTests, etc.),
 - testing frameworks and assert library agnostic,
-- keep things simple, but allow to compose and extend.
+- keep things simple, but allow compositions and extension.
 
 Current available for API testing.
 
@@ -31,20 +31,20 @@ Feel free to [create an issue](https://github.com/oskardudycz/Ogooreck/issues/ne
 
 ## API Testing
 
-Ogooreck provides a set of helpers to setup HTTP requests, Response assertions. It's recommended to add
+Ogooreck provides a set of helpers to set up HTTP requests, Response assertions. It's recommended to add such usings to your tests:
 
 ```csharp
 using Ogooreck.API;
 using static Ogooreck.API.ApiSpecification;
 ```
 
-To your tests, then you'll get a cleaner access to helper methods.
+Thanks to that, you'll get cleaner access to helper methods.
 
 See more in samples below!
 
 ### POST
 
-Ogooreck provides a set of helpers to construct request (e.g. `URI`, `BODY`) and check the standardised responses.
+Ogooreck provides a set of helpers to construct the request (e.g. `URI`, `BODY`) and check the standardised responses.
 
 ```csharp
 public Task POST_CreatesNewMeeting() =>
@@ -58,7 +58,7 @@ public Task POST_CreatesNewMeeting() =>
 
 ### PUT
 
-You can also specify headers, e.g. `IF_MATCH` to perform optimistic concurrency check.
+You can also specify headers, e.g. `IF_MATCH` to perform an optimistic concurrency check.
 
 ```csharp
  public Task PUT_ConfirmsShoppingCart() =>
@@ -72,7 +72,7 @@ You can also specify headers, e.g. `IF_MATCH` to perform optimistic concurrency 
 
 ### GET
 
-You can also do response body assertions, to e.g. out of the box check if response body is equivalent to expected one:
+You can also do response body assertions, to, e.g. out of the box check if the response body is equivalent to the expected one:
 
 ```csharp
 public Task GET_ReturnsShoppingCartDetails()
@@ -94,7 +94,7 @@ public Task GET_ReturnsShoppingCartDetails()
 
 You can also use `GET_UNTIL` helper to check API that has eventual consistency.
 
-You can use various conditions, e.g. `RESPONSE_SUCCEEDED` waits until response has one of the 2xx statuses. That's useful for new resource creation scenarios.
+You can use various conditions, e.g. `RESPONSE_SUCCEEDED` waits until a response has one of the 2xx statuses. That's useful for new resource creation scenarios.
 
 ```csharp
 public Task GET_ReturnsShoppingCartDetails()
@@ -136,7 +136,7 @@ public Task GET_ReturnsShoppingCartDetails() =>
 
 You can also do more advanced filtering via `RESPONSE_BODY_MATCHES`. That's useful for testing filtering scenarios with eventual consistency (e.g. having `Elasticsearch` as storage).
 
-You can also do custom checks on the body providing lambda.
+You can also do custom checks on the body, providing expression.
 
 ```csharp
 public Task GET_ReturnsShoppingCartDetails() =>
@@ -159,7 +159,7 @@ public Task GET_ReturnsShoppingCartDetails() =>
 
 ### DELETE
 
-Of course, delete keyword is also supported.
+Of course, the delete keyword is also supported.
 
 ```csharp
 public Task DELETE_ShouldRemoveProductFromShoppingCart() =>
@@ -313,7 +313,7 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
 
 ### Injecting as Class Fixture
 
-By default it's recommended to inject `ApiSpecification<YourProgram>` instance as `ClassFixture` to be sure that all of the dependencies (e.g. `HttpClient`) will be properly disposed.
+By default, it's recommended to inject `ApiSpecification<YourProgram>` instance as `ClassFixture` to ensure that all dependencies (e.g. `HttpClient`) will be appropriately disposed.
 
 ```csharp
 public class CreateMeetingTests: IClassFixture<ApiSpecification<Program>>
@@ -337,7 +337,7 @@ public class CreateMeetingTests: IClassFixture<ApiSpecification<Program>>
 
 ### Setting up data with `IAsyncLifetime`
 
-Sometimes you need to setup test data asynchronously (e.g. open shopping cart before canceling it). You might not want to pollute your tests code with test case setup, or do longer preparation. For that XUnit provides `IAsyncLifetime` interface. You can create fixture derived from the `APISpecification` to benefit from build in helpers and use it later in your tests.
+Sometimes you need to set up test data asynchronously (e.g. open a shopping cart before cancelling it). You might not want to pollute your tests code with test case setup or do more extended preparation. For that XUnit provides `IAsyncLifetime` interface. You can create a fixture derived from the `APISpecification` to benefit from built-in helpers and use it later in your tests.
 
 ```csharp
 public class CancelShoppingCartFixture: ApiSpecification<Program>, IAsyncLifetime
@@ -379,3 +379,11 @@ public class CancelShoppingCartTests: IClassFixture<CancelShoppingCartFixture>
             .Then(OK);
 }
 ```
+
+## Credits
+
+Special thanks go to:
+- Simon Cropp for [MarkdownSnippets](https://github.com/SimonCropp/MarkdownSnippets) that I'm using for plugging snippets to markdown,
+- Adam Ralph for [BullsEye](https://github.com/adamralph/bullseye), which I'm using to make the build process seamless,
+- [Babu Annamalai](https://mysticmind.dev/) that did a similar build setup in [Marten](https://martendb.io/) which I inspired a lot,
+- Dennis Doomen for [Fluent Assertions](https://fluentassertions.com/), which I'm using for internal assertions, especially checking the response body.
