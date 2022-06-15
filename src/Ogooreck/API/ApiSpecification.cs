@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+#pragma warning disable CS1591
 
 namespace Ogooreck.API;
 
