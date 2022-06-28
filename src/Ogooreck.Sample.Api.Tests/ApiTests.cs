@@ -29,7 +29,7 @@ public class Tests: IClassFixture<ApiSpecification<Program>>
                 BODY(new RegisterProductRequest("abc-123", "Ogooreck"))
             )
             .When(POST)
-            .Then(CREATED);
+            .Then(CREATED, RESPONSE_LOCATION_HEADER());
 
     #endregion ApiPostSample
 }
