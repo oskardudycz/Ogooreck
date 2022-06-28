@@ -2,11 +2,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Newtonsoft.Json;
 using Ogooreck.Newtonsoft;
-using JsonSerializer = System.Text.Json.JsonSerializer;
 
 #pragma warning disable CS1591
 
@@ -136,7 +136,6 @@ public static class ApiSpecification
     public static Func<HttpResponseMessage, ValueTask> CONFLICT = HTTP_STATUS(HttpStatusCode.Conflict);
     public static Func<HttpResponseMessage, ValueTask> PRECONDITION_FAILED =
         HTTP_STATUS(HttpStatusCode.PreconditionFailed);
-
     public static Func<HttpResponseMessage, ValueTask> METHOD_NOT_ALLOWED =
         HTTP_STATUS(HttpStatusCode.MethodNotAllowed);
 
@@ -145,6 +144,17 @@ public static class ApiSpecification
         {
             response.StatusCode.Should().Be(status);
             return ValueTask.CompletedTask;
+        };
+
+
+    public static Func<HttpResponseMessage, ValueTask> CREATED_WITH_DEFAULT_HEADERS(
+        string? locationHeaderPrefix = null, object? eTag = null, bool isETagWeak = true) =>
+        async response =>
+        {
+            await CREATED(response);
+            await RESPONSE_LOCATION_HEADER(locationHeaderPrefix)(response);
+            if(eTag != null)
+                await RESPONSE_ETAG_HEADER(eTag, isETagWeak)(response);
         };
 
     public static Func<HttpResponseMessage, ValueTask> RESPONSE_BODY<T>(T body) =>
@@ -169,14 +179,14 @@ public static class ApiSpecification
     public static Func<HttpResponseMessage, ValueTask> RESPONSE_ETAG_HEADER(object eTag, bool isWeak = true) =>
         RESPONSE_HEADERS(headers =>
         {
-            headers.ETag.Should().NotBeNull().And.NotBe("");
-            headers.ETag!.Tag.Should().NotBeEmpty();
+            headers.ETag.Should().NotBeNull("ETag response header should be defined").And.NotBe("", "ETag response header should not be empty");
+            headers.ETag!.Tag.Should().NotBeEmpty("ETag response header should not be empty");
 
-            headers.ETag.IsWeak.Should().Be(isWeak);
+            headers.ETag.IsWeak.Should().Be(isWeak, "Etag response header should be {0}", isWeak? "Weak": "Strong");
             headers.ETag.Tag.Should().Be($"\"{eTag}\"");
         });
 
-    public static Func<HttpResponseMessage, ValueTask> RESPONSE_LOCATION_HEADER(string? prefix = null) =>
+    public static Func<HttpResponseMessage, ValueTask> RESPONSE_LOCATION_HEADER(string? locationHeaderPrefix = null) =>
         async response =>
         {
             await HTTP_STATUS(HttpStatusCode.Created)(response);
@@ -187,7 +197,7 @@ public static class ApiSpecification
 
             var location = locationHeader!.ToString();
 
-            location.Should().StartWith(prefix ?? response.RequestMessage!.RequestUri!.AbsolutePath);
+            location.Should().StartWith(locationHeaderPrefix ?? response.RequestMessage!.RequestUri!.AbsolutePath);
         };
     public static Func<HttpResponseMessage, ValueTask> RESPONSE_HEADERS(params Action<HttpResponseHeaders>[] headers) =>
         response =>
@@ -390,18 +400,17 @@ public static class HttpResponseMessageExtensions
     public static bool TryGetCreatedId<T>(this HttpResponseMessage response, out T? value)
     {
         value = default;
-        var requestAbsolutePath = response.RequestMessage?.RequestUri?.AbsolutePath;
 
-        if (string.IsNullOrEmpty(requestAbsolutePath))
+        var locationHeader = response.Headers.Location?.OriginalString.TrimEnd('/');
+
+        if (string.IsNullOrEmpty(locationHeader))
             return false;
 
-        var suffix = requestAbsolutePath.EndsWith("/") ? "" : "/";
+        locationHeader = locationHeader.StartsWith("/") ? locationHeader: $"/{locationHeader}";
 
-        var createdId =
-            response.Headers.Location?.OriginalString.Replace(requestAbsolutePath + suffix, "");
+        var start = locationHeader.LastIndexOf("/", locationHeader.Length - 1);
 
-        if (createdId == null)
-            return false;
+        var createdId = locationHeader.Substring(start + 1, locationHeader.Length - 1 - start);
 
         var result = TypeDescriptor.GetConverter(typeof(T)).ConvertFromInvariantString(createdId);
 
