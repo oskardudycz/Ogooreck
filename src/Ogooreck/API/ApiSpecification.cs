@@ -129,33 +129,16 @@ public static class ApiSpecification
     ////   THEN    ////
     ///////////////////
     public static Func<HttpResponseMessage, ValueTask> OK = HTTP_STATUS(HttpStatusCode.OK);
-
-    public static Func<HttpResponseMessage, ValueTask> CREATED =>
-        async response =>
-        {
-            await HTTP_STATUS(HttpStatusCode.Created)(response);
-
-            var locationHeader = response.Headers.Location;
-
-            locationHeader.Should().NotBeNull();
-
-            var location = locationHeader!.ToString();
-
-            location.Should().StartWith(response.RequestMessage!.RequestUri!.AbsolutePath);
-        };
-
-
+    public static Func<HttpResponseMessage, ValueTask> CREATED = HTTP_STATUS(HttpStatusCode.Created);
     public static Func<HttpResponseMessage, ValueTask> NO_CONTENT = HTTP_STATUS(HttpStatusCode.NoContent);
-
     public static Func<HttpResponseMessage, ValueTask> BAD_REQUEST = HTTP_STATUS(HttpStatusCode.BadRequest);
     public static Func<HttpResponseMessage, ValueTask> NOT_FOUND = HTTP_STATUS(HttpStatusCode.NotFound);
     public static Func<HttpResponseMessage, ValueTask> CONFLICT = HTTP_STATUS(HttpStatusCode.Conflict);
-
     public static Func<HttpResponseMessage, ValueTask> PRECONDITION_FAILED =
         HTTP_STATUS(HttpStatusCode.PreconditionFailed);
 
-    public static Func<HttpResponseMessage, ValueTask>
-        METHOD_NOT_ALLOWED = HTTP_STATUS(HttpStatusCode.MethodNotAllowed);
+    public static Func<HttpResponseMessage, ValueTask> METHOD_NOT_ALLOWED =
+        HTTP_STATUS(HttpStatusCode.MethodNotAllowed);
 
     public static Func<HttpResponseMessage, ValueTask> HTTP_STATUS(HttpStatusCode status) =>
         response =>
@@ -177,14 +160,43 @@ public static class ApiSpecification
         };
 
     public static Func<HttpResponseMessage, ValueTask<bool>> RESPONSE_ETAG_IS(object eTag, bool isWeak = true) =>
+        async response =>
+        {
+            await RESPONSE_ETAG_HEADER(eTag, isWeak)(response);
+            return true;
+        };
+
+    public static Func<HttpResponseMessage, ValueTask> RESPONSE_ETAG_HEADER(object eTag, bool isWeak = true) =>
+        RESPONSE_HEADERS(headers =>
+        {
+            headers.ETag.Should().NotBeNull().And.NotBe("");
+            headers.ETag!.Tag.Should().NotBeEmpty();
+
+            headers.ETag.IsWeak.Should().Be(isWeak);
+            headers.ETag.Tag.Should().Be($"\"{eTag}\"");
+        });
+
+    public static Func<HttpResponseMessage, ValueTask> RESPONSE_LOCATION_HEADER(string? prefix = null) =>
+        async response =>
+        {
+            await HTTP_STATUS(HttpStatusCode.Created)(response);
+
+            var locationHeader = response.Headers.Location;
+
+            locationHeader.Should().NotBeNull();
+
+            var location = locationHeader!.ToString();
+
+            location.Should().StartWith(prefix ?? response.RequestMessage!.RequestUri!.AbsolutePath);
+        };
+    public static Func<HttpResponseMessage, ValueTask> RESPONSE_HEADERS(params Action<HttpResponseHeaders>[] headers) =>
         response =>
         {
-            response.Headers.ETag.Should().NotBeNull().And.NotBe("");
-            response.Headers.ETag!.Tag.Should().NotBeEmpty();
-
-            response.Headers.ETag.IsWeak.Should().Be(isWeak);
-            response.Headers.ETag.Tag.Should().Be($"\"{eTag}\"");
-            return new ValueTask<bool>(true);
+            foreach (var header in headers)
+            {
+                header(response.Headers);
+            }
+            return ValueTask.CompletedTask;
         };
 
     public static Func<HttpResponseMessage, ValueTask<bool>> RESPONSE_SUCCEEDED() =>
