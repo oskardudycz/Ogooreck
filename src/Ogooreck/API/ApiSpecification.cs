@@ -49,17 +49,17 @@ public static class ApiSpecification
     public static Action<HttpRequestHeaders> IF_MATCH(string ifMatch, bool isWeak = true) =>
         headers => headers.IfMatch.Add(new EntityTagHeaderValue($"\"{ifMatch}\"", isWeak));
 
-
     public static Action<HttpRequestHeaders> IF_MATCH(object ifMatch, bool isWeak = true) =>
         IF_MATCH(ifMatch.ToString()!, isWeak);
-
 
     public static Task<HttpResponseMessage> And(this Task<HttpResponseMessage> response,
         Func<HttpResponseMessage, HttpResponseMessage> and) =>
         response.ContinueWith(t => and(t.Result));
 
-
     public static Task And(this Task<HttpResponseMessage> response, Func<HttpResponseMessage, Task> and) =>
+        response.ContinueWith(t => and(t.Result));
+
+    public static Task And<TResult>(this Task<HttpResponseMessage> response, Func<HttpResponseMessage, Task<TResult>> and) =>
         response.ContinueWith(t => and(t.Result));
 
     public static Task And(this Task<HttpResponseMessage> response, Func<Task> and) =>
