@@ -427,10 +427,37 @@ public static class HttpResponseMessageExtensions
             ? createdId!
             : throw new ArgumentOutOfRangeException(nameof(response.Headers.Location));
 
-
     public static string GetCreatedId(this HttpResponseMessage response) =>
         response.GetCreatedId<string>();
 
+    public static bool TryGetETagValue<T>(this HttpResponseMessage response, out T? value)
+    {
+        value = default;
+
+        var eTagHeader = response.Headers.ETag?.Tag;
+
+        if (string.IsNullOrEmpty(eTagHeader))
+            return false;
+
+        eTagHeader = eTagHeader.Substring(1, eTagHeader.Length - 2);
+
+        var result = TypeDescriptor.GetConverter(typeof(T)).ConvertFromInvariantString(eTagHeader);
+
+        if (result == null)
+            return false;
+
+        value = (T?)result;
+
+        return true;
+    }
+
+    public static T GetETagValue<T>(this HttpResponseMessage response) =>
+        response.TryGetCreatedId<T>(out var createdId)
+            ? createdId!
+            : throw new ArgumentOutOfRangeException(nameof(response.Headers.ETag));
+
+    public static string GetETagValue(this HttpResponseMessage response) =>
+        response.GetETagValue<string>();
 
     public static async Task<T> GetResultFromJson<T>(this HttpResponseMessage response, JsonSerializerSettings? settings = null)
     {
