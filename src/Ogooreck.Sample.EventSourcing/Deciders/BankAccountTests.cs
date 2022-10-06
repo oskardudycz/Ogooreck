@@ -11,8 +11,10 @@ public class BankAccountTests
     private readonly Random random = new();
     private static readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
-    private Func<object, BankAccount, object> decide =
-        (command, bankAccount) => BankAccountDecider.Handle(() => now, command, bankAccount);
+    private static readonly DeciderSpecification<BankAccount> Spec = For<BankAccount>(
+        (command, bankAccount) => new []{BankAccountDecider.Handle(() => now, command, bankAccount)},
+        BankAccount.Evolve
+    );
 
     [Fact]
     public void GivenNonExistingBankAccount_WhenOpenWithValidParams_ThenSucceeds()
@@ -22,28 +24,22 @@ public class BankAccountTests
         var clientId = Guid.NewGuid();
         var currencyISOCode = "USD";
 
-        Given<BankAccount>()
-            .When(state => decide(new OpenBankAccount(bankAccountId, accountNumber, clientId, currencyISOCode), state))
-            .Then(EVENT(new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1)));
+        Spec.Given()
+            .When(new OpenBankAccount(bankAccountId, accountNumber, clientId, currencyISOCode))
+            .Then(new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1));
     }
 
     [Fact]
     public void GivenOpenBankAccount_WhenRecordDepositWithValidParams_ThenSucceeds()
     {
         var bankAccountId = Guid.NewGuid();
-        var accountNumber = Guid.NewGuid().ToString();
-        var clientId = Guid.NewGuid();
-        var currencyISOCode = "USD";
-
+        
         var amount = (decimal)random.NextDouble();
         var cashierId = Guid.NewGuid();
 
-        Given<BankAccount>(
-            BankAccount.Evolve,
-            new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1)
-        )
-        .When(state => decide(new RecordDeposit(amount, cashierId), state))
-        .Then(EVENT(new DepositRecorded(bankAccountId, amount, cashierId, now, 2)));
+        Spec.Given(BankAccountOpened(bankAccountId, now, 1))
+            .When(new RecordDeposit(amount, cashierId))
+            .Then(new DepositRecorded(bankAccountId, amount, cashierId, now, 2));
     }
 
     [Fact]
@@ -54,12 +50,11 @@ public class BankAccountTests
         var amount = (decimal)random.NextDouble();
         var cashierId = Guid.NewGuid();
 
-        Given<BankAccount>(
-            BankAccount.Evolve,
+        Spec.Given(
             BankAccountOpened(bankAccountId, now, 1),
             BankAccountClosed(bankAccountId, now, 2)
         )
-        .When(state => decide(new RecordDeposit(amount, cashierId), state))
+        .When(new RecordDeposit(amount, cashierId))
         .ThenThrows<InvalidOperationException>(exception => exception.Message.Should().Be("Account is closed!"));
     }
 }

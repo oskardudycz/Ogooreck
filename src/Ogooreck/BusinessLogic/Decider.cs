@@ -1,17 +1,15 @@
-namespace Ogooreck.EventSourcing;
+#pragma warning disable CS1591
 
-/// <summary>
-/// Decider definition used to run Event-Sourced tests
-/// See more in:
-/// - https://event-driven.io/en/how_to_effectively_compose_your_business_logic/
-/// - https://thinkbeforecoding.com/post/2021/12/17/functional-event-sourcing-decider
-/// </summary>
-/// <param name="Decide">Runs business logic on the current state returning newly observed facts</param>
-/// <param name="Evolve">Returns new state from the current one and an event</param>
-/// <param name="GetInitialState">Returns the initial (empty state of the entity)</param>
-/// <typeparam name="TState"></typeparam>
+namespace Ogooreck.BusinessLogic;
+
 public record Decider<TState>(
     Func<object, TState, object[]> Decide,
     Func<TState, object, TState> Evolve,
+    Func<TState> GetInitialState
+): Decider<object, object, TState>(Decide, Evolve, GetInitialState);
+
+public record Decider<TCommand, TEvent, TState>(
+    Func<TCommand, TState, TEvent[]> Decide,
+    Func<TState, TEvent, TState> Evolve,
     Func<TState> GetInitialState
 );

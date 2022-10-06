@@ -4,9 +4,207 @@ using Ogooreck.Factories;
 #pragma warning disable CS1591
 
 namespace Ogooreck.BusinessLogic;
+using static Specification;
+
+public class DeciderSpecification<TState>: DeciderSpecification<object, object, TState>
+{
+    public DeciderSpecification(Decider<object, object, TState> decider): base(decider) { }
+}
+
+public class DeciderSpecification<TCommand, TEvent, TState>
+{
+    private readonly Decider<TCommand, TEvent, TState> decider;
+
+    public DeciderSpecification(Decider<TCommand, TEvent, TState> decider) =>
+        this.decider = decider;
+
+    public GivenDeciderSpecificationBuilder<TCommand, TEvent, TState> Given(params TEvent[] events) =>
+        Given(() =>
+        {
+            var currentState = decider.GetInitialState();
+
+            return events.Aggregate(currentState, decider.Evolve);
+        });
+
+    public GivenDeciderSpecificationBuilder<TCommand, TEvent, TState> Given() =>
+        new(decider);
+
+    public GivenDeciderSpecificationBuilder<TCommand, TEvent, TState> Given(Func<TState> getCurrentState) =>
+        new(decider, getCurrentState);
+}
+
+public class GivenDeciderSpecificationBuilder<TCommand, TEvent, TState>
+{
+    private readonly Decider<TCommand, TEvent, TState> decider;
+    private readonly Func<TState>? getCurrentState;
+
+    public GivenDeciderSpecificationBuilder(
+        Decider<TCommand, TEvent, TState> decider,
+        Func<TState>? getCurrentState = null
+    )
+    {
+        this.decider = decider;
+        this.getCurrentState = getCurrentState;
+    }
+
+    public WhenDeciderSpecificationBuilder<TCommand, TEvent, TState> When(params TCommand[] commands) =>
+        new(decider, getCurrentState, commands);
+}
+
+public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
+{
+    private readonly Decider<TCommand, TEvent, TState> decider;
+    private readonly TCommand[] commands;
+    private readonly Func<TState>? getCurrentState;
+    private readonly Lazy<Specification.BusinessLogicThenResult<TState, TEvent>> getResult;
+
+    public WhenDeciderSpecificationBuilder(
+        Decider<TCommand, TEvent, TState> decider,
+        Func<TState>? getCurrentState,
+        TCommand[] commands
+    )
+    {
+        this.decider = decider;
+        this.commands = commands;
+        this.getCurrentState = getCurrentState;
+        getResult = new Lazy<Specification.BusinessLogicThenResult<TState, TEvent>>(Perform);
+    }
+
+    public void Then(Action<TEvent[]> then)
+    {
+        then(getResult.Value.NewEvents);
+    }
+
+    public void Then(params TEvent[] thens)
+    {
+        var result = getResult.Value;
+
+        foreach (var then in thens)
+        {
+            EVENTS(result.NewEvents);
+        }
+    }
+
+    public void Then(params Action<TEvent[]>[] thens)
+    {
+        var result = getResult.Value;
+
+        foreach (var then in thens)
+        {
+            then(result.NewEvents);
+        }
+    }
+
+    public void Then(params Action<TState>[] thens)
+    {
+        var result = getResult.Value;
+
+        foreach (var then in thens)
+        {
+            then(result.CurrentState);
+        }
+    }
+
+    public void Then(params Action<TState, TEvent[]>[] thens)
+    {
+        var result = getResult.Value;
+
+        foreach (var then in thens)
+        {
+            then(result.CurrentState, result.NewEvents);
+        }
+    }
+
+    public void Then(params Action<Specification.BusinessLogicThenResult<TState, TEvent>>[] thens)
+    {
+        var result = getResult.Value;
+
+        foreach (var then in thens)
+        {
+            then(result);
+        }
+    }
+
+    public void ThenThrows<TException>(Action<TException>? assert = null) where TException : Exception
+    {
+        try
+        {
+            var _ = getResult.Value;
+        }
+        catch (TException e)
+        {
+            assert?.Invoke(e);
+        }
+    }
+
+    private Specification.BusinessLogicThenResult<TState, TEvent> Perform()
+    {
+        var currentState = (getCurrentState ?? decider.GetInitialState)();
+        var resultEvents = new List<TEvent>();
+
+        foreach (var command in commands)
+        {
+            var newEvents = decider.Decide(command, currentState);
+            resultEvents.AddRange(newEvents);
+
+            currentState = newEvents.Aggregate(currentState, decider.Evolve);
+        }
+
+        return new Specification.BusinessLogicThenResult<TState, TEvent>(currentState, resultEvents.ToArray());
+    }
+}
 
 public class Specification
 {
+    public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
+        Decider<TCommand, TEvent, TState> decider
+    ) =>
+        new(decider);
+
+    public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
+        Func<TCommand, TState, TEvent[]> decide,
+        Func<TState, TEvent, TState> evolve,
+        Func<TState>? getInitialState = null
+    ) =>
+        For(
+            new Decider<TCommand, TEvent, TState>(
+                decide,
+                evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
+    public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
+        Func<TCommand, TState, TEvent> decide,
+        Func<TState, TEvent, TState> evolve,
+        Func<TState>? getInitialState
+    ) =>
+        For(
+            new Decider<TCommand, TEvent, TState>(
+                (command, currentState) => new[] { decide(command, currentState) },
+                evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
+    public static DeciderSpecification<TState> For<TState>(
+        Decider<object, object, TState> decider
+    ) =>
+        new(decider);
+
+    public static DeciderSpecification<TState> For<TState>(
+        Func<object, TState, object[]> decide,
+        Func<TState, object, TState> evolve,
+        Func<TState>? getInitialState = null
+    ) =>
+        For(
+            new Decider<TState>(
+                decide,
+                evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
     ///////////////////
     ////   GIVEN   ////
     ///////////////////
@@ -239,7 +437,7 @@ public class Specification
             }
         }
 
-        public void ThenThrows<TException>(Action<TException>? assert = null) where TException: Exception
+        public void ThenThrows<TException>(Action<TException>? assert = null) where TException : Exception
         {
             try
             {
