@@ -92,10 +92,10 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
         getResult = new Lazy<BusinessLogicThenResult<TState, TEvent>>(Perform);
     }
 
-    public void Then(params TEvent[] thens)
+    public void Then(params TEvent[] expectedEvents)
     {
         var result = getResult.Value;
-        EVENTS(result.NewEvents);
+        result.NewEvents.Should().BeEquivalentTo(expectedEvents);
     }
 
     public void Then(TState expectedState)
@@ -153,7 +153,7 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
 
         foreach (var command in commands)
         {
-            TEvent[] newEvents = decider.Decide(command, currentState);
+            var newEvents = decider.Decide(command, currentState);
             resultEvents.AddRange(newEvents);
 
             currentState = newEvents.Aggregate(currentState, decider.Evolve);
@@ -287,54 +287,20 @@ public class Specification
             )
         );
 
-    public record BusinessLogicThenResult<TState, TEvent>(
+    internal record BusinessLogicThenResult<TState, TEvent>(
         TState CurrentState,
         TEvent[] NewEvents
     );
 
+    public record DecideResult<TEvent>(
+        TEvent[] Events
+    )
+    {
+        public static implicit operator DecideResult<TEvent>(TEvent @event) => new(new[] { @event });
 
-    public static Action<object[]> EVENT(
-        object expectedEvent
-    ) =>
-        EVENT<object>(expectedEvent);
+        public static implicit operator DecideResult<TEvent>(TEvent[] events) => new(events);
 
-    public static Action<TEvent[]> EVENT<TEvent>(
-        object expectedEvent
-    ) =>
-        events =>
-        {
-            events.Should().HaveCount(1);
-            events.Single().Should().BeEquivalentTo(expectedEvent);
-        };
-
-    public static Action<object[]> EVENTS(
-        params object[] expectedEvents
-    ) =>
-        EVENTS<object>(expectedEvents);
-
-    public static Action<TEvent[]> EVENTS<TEvent>(
-        params object[] expectedEvents
-    ) =>
-        events => events.Should().BeEquivalentTo(expectedEvents);
-
-    public static Action<BusinessLogicThenResult<TState, TEvent>> STATE<TState, TEvent>(TState state) =>
-        result => result.CurrentState.Should().BeEquivalentTo(state);
-
-    public static Action<object[]> EVENT_OF_TYPE<TEvent>() =>
-        events =>
-        {
-            events.Should().HaveCount(1);
-            events.Single().Should().BeOfType<TEvent>();
-        };
+        public static implicit operator TEvent[](DecideResult<TEvent> result) => result.Events;
+    }
 }
 
-public record DecideResult<TEvent>(
-    TEvent[] Events
-)
-{
-    public static implicit operator DecideResult<TEvent>(TEvent @event) => new(new[] { @event });
-
-    public static implicit operator DecideResult<TEvent>(TEvent[] events) => new(events);
-
-    public static implicit operator TEvent[](DecideResult<TEvent> result) => result.Events;
-}
