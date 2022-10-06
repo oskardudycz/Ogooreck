@@ -3,7 +3,6 @@ using FluentAssertions;
 
 namespace Ogooreck.Sample.EventSourcing.Deciders;
 
-using static Specification;
 using static BankAccountEventsBuilder;
 
 public class BankAccountTests
@@ -11,8 +10,8 @@ public class BankAccountTests
     private readonly Random random = new();
     private static readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
-    private static readonly DeciderSpecification<BankAccount> Spec = For<BankAccount>(
-        (command, bankAccount) => new []{BankAccountDecider.Handle(() => now, command, bankAccount)},
+    private readonly DeciderSpecification<BankAccount> Spec = Specification.For<BankAccount>(
+        (command, bankAccount) => new[] { BankAccountDecider.Handle(() => now, command, bankAccount) },
         BankAccount.Evolve
     );
 
@@ -33,7 +32,7 @@ public class BankAccountTests
     public void GivenOpenBankAccount_WhenRecordDepositWithValidParams_ThenSucceeds()
     {
         var bankAccountId = Guid.NewGuid();
-        
+
         var amount = (decimal)random.NextDouble();
         var cashierId = Guid.NewGuid();
 
@@ -51,11 +50,11 @@ public class BankAccountTests
         var cashierId = Guid.NewGuid();
 
         Spec.Given(
-            BankAccountOpened(bankAccountId, now, 1),
-            BankAccountClosed(bankAccountId, now, 2)
-        )
-        .When(new RecordDeposit(amount, cashierId))
-        .ThenThrows<InvalidOperationException>(exception => exception.Message.Should().Be("Account is closed!"));
+                BankAccountOpened(bankAccountId, now, 1),
+                BankAccountClosed(bankAccountId, now, 2)
+            )
+            .When(new RecordDeposit(amount, cashierId))
+            .ThenThrows<InvalidOperationException>(exception => exception.Message.Should().Be("Account is closed!"));
     }
 }
 

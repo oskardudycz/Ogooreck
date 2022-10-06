@@ -5,14 +5,15 @@ using Ogooreck.Sample.EventSourcing.Aggregates.Products;
 
 namespace Ogooreck.Sample.EventSourcing.Aggregates;
 
-using static Specification;
-using static AggregateTestExtensions;
+using static ShoppingCartEventsBuilder;
+using static ProductItemBuilder;
+using static AggregateTestExtensions<ShoppingCart>;
 
 public class ShoppingCartTests
 {
     private readonly Random random = new();
 
-    private readonly Func<ShoppingCart, object, ShoppingCart> evolve =
+    private static readonly Func<ShoppingCart, object, ShoppingCart> evolve =
         (cart, @event) =>
         {
             switch (@event)
@@ -37,6 +38,8 @@ public class ShoppingCartTests
             return cart;
         };
 
+    private readonly AggregateSpecification<ShoppingCart> Spec = Specification.For(Handle, evolve);
+
     private class DummyProductPriceCalculator: IProductPriceCalculator
     {
         private readonly decimal price;
@@ -53,46 +56,49 @@ public class ShoppingCartTests
         var shoppingCartId = Guid.NewGuid();
         var clientId = Guid.NewGuid();
 
-        Given<ShoppingCart>()
-            .When(() => ShoppingCart.Open(shoppingCartId, clientId))
-            .Then(EVENT(new ShoppingCartOpened(shoppingCartId, clientId)));
+        Spec.Given()
+            .When(_ => ShoppingCart.Open(shoppingCartId, clientId))
+            .Then(new ShoppingCartOpened(shoppingCartId, clientId));
     }
-
 
     [Fact]
     public void GivenOpenShoppingCart_WhenAddProductWithValidParams_ThenSucceeds()
     {
         var shoppingCartId = Guid.NewGuid();
-        var clientId = Guid.NewGuid();
-        var productItem = ProductItem.From(Guid.NewGuid(), random.Next(100));
+
+        var productItem = ValidProductItem();
         var price = random.Next(1000);
         var priceCalculator = new DummyProductPriceCalculator(price);
 
-        Given(evolve, () => new ShoppingCartOpened(shoppingCartId, clientId))
+        Spec.Given(ShoppingCartOpened(shoppingCartId))
             .When(cart => cart.AddProduct(priceCalculator, productItem))
-            .Then(EVENT(new ProductAdded(shoppingCartId, PricedProductItem.For(productItem, price))));
+            .Then(new ProductAdded(shoppingCartId, PricedProductItem.For(productItem, price)));
     }
 }
 
-public static class AggregateTestExtensions
+public static class ShoppingCartEventsBuilder
 {
-    public static WhenBusinessLogicSpecificationBuilder<TAggregate, object> When<TAggregate>(
-        this GivenBusinessLogicSpecificationBuilder<TAggregate, object> builder,
-        Func<TAggregate> perform
-    ) where TAggregate : Aggregate =>
-        builder.When(_ =>
-        {
-            var aggregate = perform();
-            return (aggregate, aggregate.DequeueUncommittedEvents());
-        });
+    public static ShoppingCartOpened ShoppingCartOpened(Guid shoppingCartId)
+    {
+        var clientId = Guid.NewGuid();
 
-    public static WhenBusinessLogicSpecificationBuilder<TAggregate, object> When<TAggregate>(
-        this GivenBusinessLogicSpecificationBuilder<TAggregate, object> builder,
-        Action<TAggregate> perform
-    ) where TAggregate : Aggregate =>
-        builder.When(aggregate =>
-        {
-            perform(aggregate);
-            return (aggregate, aggregate.DequeueUncommittedEvents());
-        });
+        return new ShoppingCartOpened(shoppingCartId, clientId);
+    }
+}
+
+public static class ProductItemBuilder
+{
+    private static readonly Random Random = new();
+
+    public static ProductItem ValidProductItem() =>
+        ProductItem.From(Guid.NewGuid(), Random.Next(100));
+}
+
+public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggregate
+{
+    public static object[] Handle(Action<TAggregate> handle, TAggregate bankAccount)
+    {
+        handle(bankAccount);
+        return bankAccount.DequeueUncommittedEvents();
+    }
 }

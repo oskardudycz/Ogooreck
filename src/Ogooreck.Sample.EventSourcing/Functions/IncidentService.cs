@@ -53,11 +53,11 @@ public record CloseIncident(
 
 internal static class IncidentService
 {
-    public static IncidentLogged Handle(LogIncident command)
+    public static IncidentLogged Handle(Func<DateTimeOffset> now, LogIncident command)
     {
         var (incidentId, customerId, contact, description, loggedBy) = command;
 
-        return new IncidentLogged(incidentId, customerId, contact, description, loggedBy, DateTimeOffset.UtcNow);
+        return new IncidentLogged(incidentId, customerId, contact, description, loggedBy, now());
     }
 
     public static IncidentCategorised Handle(Incident current, CategoriseIncident command)
