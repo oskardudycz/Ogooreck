@@ -96,7 +96,7 @@ public static class ProductItemBuilder
 
 public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggregate
 {
-    public static object[] Handle(Action<TAggregate> handle, TAggregate bankAccount)
+    public static DecideResult<object> Handle(Action<TAggregate> handle, TAggregate bankAccount)
     {
         handle(bankAccount);
         return bankAccount.DequeueUncommittedEvents();

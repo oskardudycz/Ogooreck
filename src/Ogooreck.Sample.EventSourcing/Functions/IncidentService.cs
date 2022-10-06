@@ -60,37 +60,38 @@ internal static class IncidentService
         return new IncidentLogged(incidentId, customerId, contact, description, loggedBy, now());
     }
 
-    public static IncidentCategorised Handle(Incident current, CategoriseIncident command)
+    public static IncidentCategorised Handle(Func<DateTimeOffset> now, Incident current, CategoriseIncident command)
     {
         if (current.Status == IncidentStatus.Closed)
             throw new InvalidOperationException("Incident is already closed");
 
         var (incidentId, incidentCategory, categorisedBy) = command;
 
-        return new IncidentCategorised(incidentId, incidentCategory, categorisedBy, DateTimeOffset.UtcNow);
+        return new IncidentCategorised(incidentId, incidentCategory, categorisedBy, now());
     }
 
-    public static IncidentPrioritised Handle(Incident current, PrioritiseIncident command)
+    public static IncidentPrioritised Handle(Func<DateTimeOffset> now, Incident current, PrioritiseIncident command)
     {
         if (current.Status == IncidentStatus.Closed)
             throw new InvalidOperationException("Incident is already closed");
 
         var (incidentId, incidentPriority, prioritisedBy) = command;
 
-        return new IncidentPrioritised(incidentId, incidentPriority, prioritisedBy, DateTimeOffset.UtcNow);
+        return new IncidentPrioritised(incidentId, incidentPriority, prioritisedBy, now());
     }
 
-    public static AgentAssignedToIncident Handle(Incident current, AssignAgentToIncident command)
+    public static AgentAssignedToIncident Handle(Func<DateTimeOffset> now, Incident current, AssignAgentToIncident command)
     {
         if (current.Status == IncidentStatus.Closed)
             throw new InvalidOperationException("Incident is already closed");
 
         var (incidentId, agentId) = command;
 
-        return new AgentAssignedToIncident(incidentId, agentId, DateTimeOffset.UtcNow);
+        return new AgentAssignedToIncident(incidentId, agentId, now());
     }
 
     public static AgentRespondedToIncident Handle(
+        Func<DateTimeOffset> now,
         Incident current,
         RecordAgentResponseToIncident command
     )
@@ -100,10 +101,11 @@ internal static class IncidentService
 
         var (incidentId, response) = command;
 
-        return new AgentRespondedToIncident(incidentId, response, DateTimeOffset.UtcNow);
+        return new AgentRespondedToIncident(incidentId, response, now());
     }
 
     public static CustomerRespondedToIncident Handle(
+        Func<DateTimeOffset> now,
         Incident current,
         RecordCustomerResponseToIncident command
     )
@@ -113,10 +115,11 @@ internal static class IncidentService
 
         var (incidentId, response) = command;
 
-        return new CustomerRespondedToIncident(incidentId, response, DateTimeOffset.UtcNow);
+        return new CustomerRespondedToIncident(incidentId, response, now());
     }
 
     public static IncidentResolved Handle(
+        Func<DateTimeOffset> now,
         Incident current,
         ResolveIncident command
     )
@@ -129,10 +132,11 @@ internal static class IncidentService
 
         var (incidentId, resolution, resolvedBy) = command;
 
-        return new IncidentResolved(incidentId, resolution, resolvedBy, DateTimeOffset.UtcNow);
+        return new IncidentResolved(incidentId, resolution, resolvedBy, now());
     }
 
     public static ResolutionAcknowledgedByCustomer Handle(
+        Func<DateTimeOffset> now,
         Incident current,
         AcknowledgeResolution command
     )
@@ -142,10 +146,11 @@ internal static class IncidentService
 
         var (incidentId, acknowledgedBy) = command;
 
-        return new ResolutionAcknowledgedByCustomer(incidentId, acknowledgedBy, DateTimeOffset.UtcNow);
+        return new ResolutionAcknowledgedByCustomer(incidentId, acknowledgedBy, now());
     }
 
     public static IncidentClosed Handle(
+        Func<DateTimeOffset> now,
         Incident current,
         CloseIncident command
     )
@@ -158,6 +163,6 @@ internal static class IncidentService
 
         var (incidentId, acknowledgedBy) = command;
 
-        return new IncidentClosed(incidentId, acknowledgedBy, DateTimeOffset.UtcNow);
+        return new IncidentClosed(incidentId, acknowledgedBy, now());
     }
 }

@@ -22,14 +22,15 @@ public class AggregateSpecification<TState>: AggregateSpecification<object, TSta
     public AggregateSpecification(Decider<Action<TState>, object, TState> decider): base(decider) { }
 }
 
-public class HandlerSpecification<TEvent, TState>: DeciderSpecification<Func<TState, TEvent[]>, TEvent, TState>
+public class
+    HandlerSpecification<TEvent, TState>: DeciderSpecification<Func<TState, DecideResult<TEvent>>, TEvent, TState>
 {
-    public HandlerSpecification(Decider<Func<TState, TEvent[]>, TEvent, TState> decider): base(decider) { }
+    public HandlerSpecification(Decider<Func<TState, DecideResult<TEvent>>, TEvent, TState> decider): base(decider) { }
 }
 
 public class HandlerSpecification<TState>: HandlerSpecification<object, TState>
 {
-    public HandlerSpecification(Decider<Func<TState, object[]>, object, TState> decider): base(decider) { }
+    public HandlerSpecification(Decider<Func<TState, DecideResult<object>>, object, TState> decider): base(decider) { }
 }
 
 public class DeciderSpecification<TCommand, TEvent, TState>
@@ -91,19 +92,16 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
         getResult = new Lazy<BusinessLogicThenResult<TState, TEvent>>(Perform);
     }
 
-    public void Then(Action<TEvent[]> then)
-    {
-        then(getResult.Value.NewEvents);
-    }
-
     public void Then(params TEvent[] thens)
     {
         var result = getResult.Value;
+        EVENTS(result.NewEvents);
+    }
 
-        foreach (var then in thens)
-        {
-            EVENTS(result.NewEvents);
-        }
+    public void Then(TState expectedState)
+    {
+        var result = getResult.Value;
+        result.CurrentState.Should().BeEquivalentTo(expectedState);
     }
 
     public void Then(params Action<TEvent[]>[] thens)
@@ -136,16 +134,6 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
         }
     }
 
-    public void Then(params Action<BusinessLogicThenResult<TState, TEvent>>[] thens)
-    {
-        var result = getResult.Value;
-
-        foreach (var then in thens)
-        {
-            then(result);
-        }
-    }
-
     public void ThenThrows<TException>(Action<TException>? assert = null) where TException : Exception
     {
         try
@@ -165,7 +153,7 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
 
         foreach (var command in commands)
         {
-            var newEvents = decider.Decide(command, currentState);
+            TEvent[] newEvents = decider.Decide(command, currentState);
             resultEvents.AddRange(newEvents);
 
             currentState = newEvents.Aggregate(currentState, decider.Evolve);
@@ -189,20 +177,7 @@ public class Specification
     ) =>
         For(
             new Decider<TCommand, TEvent, TState>(
-                decide,
-                evolve,
-                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
-            )
-        );
-
-    public static DeciderSpecification<Action<TState>, TEvent, TState> For<TEvent, TState>(
-        Func<Action<TState>, TState, TEvent[]> decide,
-        Func<TState, TEvent, TState> evolve,
-        Func<TState>? getInitialState = null
-    ) =>
-        For(
-            new Decider<Action<TState>, TEvent, TState>(
-                decide,
+                (command, currentState) => decide(command, currentState),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -234,14 +209,53 @@ public class Specification
             )
         );
 
+    public static DeciderSpecification<Action<TState>, TEvent, TState> For<TEvent, TState>(
+        Func<Action<TState>, TState, TEvent[]> decide,
+        Func<TState, TEvent, TState> evolve,
+        Func<TState>? getInitialState
+    ) =>
+        For(
+            new Decider<Action<TState>, TEvent, TState>(
+                (command, currentState) => decide(command, currentState),
+                evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
+    public static DeciderSpecification<TState> For<TState>(
+        Func<object, TState, object> decide,
+        Func<TState, object, TState> evolve,
+        Func<TState>? getInitialState = null
+    ) =>
+        new(
+            new Decider<object, object, TState>(
+                (command, state) => new[] { decide(command, state) },
+                evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
     public static DeciderSpecification<TState> For<TState>(
         Func<object, TState, object[]> decide,
         Func<TState, object, TState> evolve,
         Func<TState>? getInitialState = null
     ) =>
         new(
-            new Decider<TState>(
+            new Decider<object, object, TState>(
                 decide,
+                evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
+    public static AggregateSpecification<TState> For<TState>(
+        Func<Action<TState>, TState, object> decide,
+        Func<TState, object, TState> evolve,
+        Func<TState>? getInitialState = null
+    ) =>
+        new(
+            new Decider<Action<TState>, object, TState>(
+                (command, state) => new[] { decide(command, state) },
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -260,12 +274,13 @@ public class Specification
             )
         );
 
+
     public static HandlerSpecification<TState> For<TState>(
         Func<TState, object, TState> evolve,
         Func<TState>? getInitialState = null
     ) =>
         new(
-            new Decider<Func<TState, object[]>, object, TState>(
+            new Decider<Func<TState, DecideResult<object>>, object, TState>(
                 (handler, state) => handler(state),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
@@ -320,7 +335,6 @@ public record DecideResult<TEvent>(
     public static implicit operator DecideResult<TEvent>(TEvent @event) => new(new[] { @event });
 
     public static implicit operator DecideResult<TEvent>(TEvent[] events) => new(events);
-
 
     public static implicit operator TEvent[](DecideResult<TEvent> result) => result.Events;
 }

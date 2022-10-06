@@ -11,7 +11,7 @@ public class BankAccountTests
     private static readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
     private readonly DeciderSpecification<BankAccount> Spec = Specification.For<BankAccount>(
-        (command, bankAccount) => new[] { BankAccountDecider.Handle(() => now, command, bankAccount) },
+        (command, bankAccount) => BankAccountDecider.Handle(() => now, command, bankAccount),
         BankAccount.Evolve
     );
 
