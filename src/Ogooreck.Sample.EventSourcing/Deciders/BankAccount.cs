@@ -5,7 +5,7 @@ public record BankAccountOpened(
     string AccountNumber,
     Guid ClientId,
     string CurrencyISOCode,
-    DateTime CreatedAt,
+    DateTimeOffset CreatedAt,
     long Version
 );
 
@@ -13,7 +13,7 @@ public record DepositRecorded(
     Guid BankAccountId,
     decimal Amount,
     Guid CashierId,
-    DateTime RecordedAt,
+    DateTimeOffset RecordedAt,
     long Version
 );
 
@@ -21,13 +21,13 @@ public record CashWithdrawnFromATM(
     Guid BankAccountId,
     decimal Amount,
     Guid ATMId,
-    DateTime RecordedAt,
+    DateTimeOffset RecordedAt,
     long Version
 );
 
 public record BankAccountClosed(Guid BankAccountId,
     string commandReason,
-    DateTime ClosedAt,
+    DateTimeOffset ClosedAt,
     long Version);
 
 public enum BankAccountStatus

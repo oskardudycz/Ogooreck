@@ -15,13 +15,23 @@ public class ShoppingCartTests
     private readonly Func<ShoppingCart, object, ShoppingCart> evolve =
         (cart, @event) =>
         {
-            switch(@event)
+            switch (@event)
             {
-                case ShoppingCartOpened opened: cart.Apply(opened); break;
-                case ProductAdded productAdded: cart.Apply(productAdded); break;
-                case ProductRemoved productRemoved: cart.Apply(productRemoved); break;
-                case ShoppingCartConfirmed confirmed: cart.Apply(confirmed); break;
-                case ShoppingCartCanceled canceled: cart.Apply(canceled); break;
+                case ShoppingCartOpened opened:
+                    cart.Apply(opened);
+                    break;
+                case ProductAdded productAdded:
+                    cart.Apply(productAdded);
+                    break;
+                case ProductRemoved productRemoved:
+                    cart.Apply(productRemoved);
+                    break;
+                case ShoppingCartConfirmed confirmed:
+                    cart.Apply(confirmed);
+                    break;
+                case ShoppingCartCanceled canceled:
+                    cart.Apply(canceled);
+                    break;
             }
 
             return cart;
@@ -44,7 +54,7 @@ public class ShoppingCartTests
         var clientId = Guid.NewGuid();
 
         Given<ShoppingCart>()
-            .When(WithEvents(() => ShoppingCart.Open(shoppingCartId, clientId)))
+            .When(() => ShoppingCart.Open(shoppingCartId, clientId))
             .Then(EVENT(new ShoppingCartOpened(shoppingCartId, clientId)));
     }
 
@@ -59,26 +69,30 @@ public class ShoppingCartTests
         var priceCalculator = new DummyProductPriceCalculator(price);
 
         Given(evolve, () => new ShoppingCartOpened(shoppingCartId, clientId))
-            .When(WithEvents<ShoppingCart>(cart => cart.AddProduct(priceCalculator, productItem)))
+            .When(cart => cart.AddProduct(priceCalculator, productItem))
             .Then(EVENT(new ProductAdded(shoppingCartId, PricedProductItem.For(productItem, price))));
     }
 }
 
 public static class AggregateTestExtensions
 {
-    public static Func<TAggregate, (TAggregate, object[])> WithEvents<TAggregate>(Func<TAggregate> perform)
-        where TAggregate : Aggregate =>
-        _ =>
+    public static WhenBusinessLogicSpecificationBuilder<TAggregate, object> When<TAggregate>(
+        this GivenBusinessLogicSpecificationBuilder<TAggregate, object> builder,
+        Func<TAggregate> perform
+    ) where TAggregate : Aggregate =>
+        builder.When(_ =>
         {
             var aggregate = perform();
             return (aggregate, aggregate.DequeueUncommittedEvents());
-        };
+        });
 
-    public static Func<TAggregate, (TAggregate, object[])> WithEvents<TAggregate>(Action<TAggregate> perform)
-        where TAggregate : Aggregate =>
-        aggregate =>
+    public static WhenBusinessLogicSpecificationBuilder<TAggregate, object> When<TAggregate>(
+        this GivenBusinessLogicSpecificationBuilder<TAggregate, object> builder,
+        Action<TAggregate> perform
+    ) where TAggregate : Aggregate =>
+        builder.When(aggregate =>
         {
             perform(aggregate);
             return (aggregate, aggregate.DequeueUncommittedEvents());
-        };
+        });
 }

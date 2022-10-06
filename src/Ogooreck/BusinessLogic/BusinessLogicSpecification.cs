@@ -231,6 +231,18 @@ public static class BusinessLogicSpecification
             }
         }
 
+        public void ThenThrows<TException>(Action<TException>? assert = null) where TException: Exception
+        {
+            try
+            {
+                var result = getResult.Value;
+            }
+            catch (TException e)
+            {
+                assert?.Invoke(e);
+            }
+        }
+
         private BusinessLogicThenResult<TState, TEvent> Perform()
         {
             var events = getEvents().ToList();
