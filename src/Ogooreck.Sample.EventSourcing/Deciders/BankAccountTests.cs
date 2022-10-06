@@ -1,11 +1,10 @@
 using Ogooreck.BusinessLogic;
-using Ogooreck.Sample.EventSourcing.Aggregates;
-using System;
 using FluentAssertions;
 
 namespace Ogooreck.Sample.EventSourcing.Deciders;
 
-using static BusinessLogicSpecification;
+using static Specification;
+using static BankAccountEventsBuilder;
 
 public class BankAccountTests
 {
@@ -28,7 +27,6 @@ public class BankAccountTests
             .Then(EVENT(new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1)));
     }
 
-
     [Fact]
     public void GivenOpenBankAccount_WhenRecordDepositWithValidParams_ThenSucceeds()
     {
@@ -40,34 +38,47 @@ public class BankAccountTests
         var amount = (decimal)random.NextDouble();
         var cashierId = Guid.NewGuid();
 
-        Given<BankAccount>(BankAccount.Evolve,
-                () => new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1))
-            .When(state => decide(new RecordDeposit(amount, cashierId), state))
-            .Then(EVENT(new DepositRecorded(bankAccountId, amount, cashierId, now, 2)));
+        Given<BankAccount>(
+            BankAccount.Evolve,
+            new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1)
+        )
+        .When(state => decide(new RecordDeposit(amount, cashierId), state))
+        .Then(EVENT(new DepositRecorded(bankAccountId, amount, cashierId, now, 2)));
     }
 
     [Fact]
     public void GivenClosedBankAccount_WhenRecordDepositWithValidParams_ThenFailsWithInvalidOperationException()
     {
         var bankAccountId = Guid.NewGuid();
-        var accountNumber = Guid.NewGuid().ToString();
-        var clientId = Guid.NewGuid();
-        var currencyISOCode = "USD";
-
-        var reason = Guid.NewGuid().ToString();
 
         var amount = (decimal)random.NextDouble();
         var cashierId = Guid.NewGuid();
 
         Given<BankAccount>(
-                BankAccount.Evolve,
-                () => new object[]
-                {
-                    new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1),
-                    new BankAccountClosed(bankAccountId, reason, now, 2),
-                }
-            )
-            .When(state => decide(new RecordDeposit(amount, cashierId), state))
-            .ThenThrows<InvalidOperationException>(exception => exception.Message.Should().Be("Account is closed!"));
+            BankAccount.Evolve,
+            BankAccountOpened(bankAccountId, now, 1),
+            BankAccountClosed(bankAccountId, now, 2)
+        )
+        .When(state => decide(new RecordDeposit(amount, cashierId), state))
+        .ThenThrows<InvalidOperationException>(exception => exception.Message.Should().Be("Account is closed!"));
+    }
+}
+
+public static class BankAccountEventsBuilder
+{
+    public static BankAccountOpened BankAccountOpened(Guid bankAccountId, DateTimeOffset now, long version)
+    {
+        var accountNumber = Guid.NewGuid().ToString();
+        var clientId = Guid.NewGuid();
+        var currencyISOCode = "USD";
+
+        return new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, version);
+    }
+
+    public static BankAccountClosed BankAccountClosed(Guid bankAccountId, DateTimeOffset now, long version)
+    {
+        var reason = Guid.NewGuid().ToString();
+
+        return new BankAccountClosed(bankAccountId, reason, now, version);
     }
 }

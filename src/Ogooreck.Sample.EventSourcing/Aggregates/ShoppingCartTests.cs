@@ -5,7 +5,7 @@ using Ogooreck.Sample.EventSourcing.Aggregates.Products;
 
 namespace Ogooreck.Sample.EventSourcing.Aggregates;
 
-using static BusinessLogicSpecification;
+using static Specification;
 using static AggregateTestExtensions;
 
 public class ShoppingCartTests

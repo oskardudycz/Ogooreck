@@ -5,10 +5,7 @@ using Ogooreck.Factories;
 
 namespace Ogooreck.BusinessLogic;
 
-/// <summary>
-///
-/// </summary>
-public static class BusinessLogicSpecification
+public class Specification
 {
     ///////////////////
     ////   GIVEN   ////
@@ -24,20 +21,32 @@ public static class BusinessLogicSpecification
 
     public static GivenBusinessLogicSpecificationBuilder<TState, object> Given<TState>(
         Func<TState, object, TState> evolve,
-        Func<IEnumerable<object>> events
+        params object[] events
     ) =>
         Given<TState, object>(evolve, events);
 
     public static GivenBusinessLogicSpecificationBuilder<TState, object> Given<TState>(
         Func<TState, object, TState> evolve,
-        Func<object> events
+        Func<IEnumerable<object>> getEvents
     ) =>
-        Given<TState, object>(evolve, () => new[] { events() });
+        Given<TState, object>(evolve, getEvents);
+
+    public static GivenBusinessLogicSpecificationBuilder<TState, object> Given<TState>(
+        Func<TState, object, TState> evolve,
+        Func<object> getEvents
+    ) =>
+        Given<TState, object>(evolve, () => new[] { getEvents() });
 
     public static GivenBusinessLogicSpecificationBuilder<TState, TEvent> Given<TState, TEvent>(
         Func<TState, TEvent, TState> evolve
     ) =>
         Given(evolve, Array.Empty<TEvent>);
+
+    public static GivenBusinessLogicSpecificationBuilder<TState, TEvent> Given<TState, TEvent>(
+        Func<TState, TEvent, TState> evolve,
+        params TEvent[] events
+    ) =>
+        new(evolve, ObjectFactory<TState>.GetDefaultOrUninitialized, () => events);
 
     public static GivenBusinessLogicSpecificationBuilder<TState, TEvent> Given<TState, TEvent>(
         Func<TState, TEvent, TState> evolve,
@@ -51,13 +60,12 @@ public static class BusinessLogicSpecification
     ) =>
         new(evolve, getInitialState, Array.Empty<TEvent>);
 
-
     public static GivenBusinessLogicSpecificationBuilder<TState, TEvent> Given<TState, TEvent>(
         Func<TState, TEvent, TState> evolve,
         Func<TState> getInitialState,
-        Func<IEnumerable<TEvent>> events
+        Func<IEnumerable<TEvent>> getEvents
     ) =>
-        new(evolve, getInitialState, events);
+        new(evolve, getInitialState, getEvents);
 
 
     /////////////////////
