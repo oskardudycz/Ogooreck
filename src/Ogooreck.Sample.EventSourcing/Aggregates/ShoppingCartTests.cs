@@ -57,7 +57,7 @@ public class ShoppingCartTests
         var clientId = Guid.NewGuid();
 
         Spec.Given()
-            .When(_ => ShoppingCart.Open(shoppingCartId, clientId))
+            .When(() => ShoppingCart.Open(shoppingCartId, clientId))
             .Then(new ShoppingCartOpened(shoppingCartId, clientId));
     }
 
@@ -96,9 +96,10 @@ public static class ProductItemBuilder
 
 public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggregate
 {
-    public static object[] Handle(Action<TAggregate> handle, TAggregate aggregate)
+    public static DecideResult<object, TAggregate> Handle(Func<TAggregate, DecideResult<object, TAggregate>> handle, TAggregate aggregate)
     {
-        handle(aggregate);
-        return aggregate.DequeueUncommittedEvents();
+        var result = handle(aggregate);
+        var updatedAggregate = result.CurrentState ?? aggregate;
+        return new DecideResult<object, TAggregate>(updatedAggregate.DequeueUncommittedEvents(), updatedAggregate);
     }
 }
