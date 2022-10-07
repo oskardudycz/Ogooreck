@@ -39,7 +39,7 @@ public class IncidentTests
         var loggedBy = Guid.NewGuid();
 
         Spec.Given()
-            .When(_ => Handle(() => now, new LogIncident(incidentId, customerId, contact, description, loggedBy)))
+            .When(() => Handle(() => now, new LogIncident(incidentId, customerId, contact, description, loggedBy)))
             .Then(new IncidentLogged(incidentId, customerId, contact, description, loggedBy, now));
     }
 

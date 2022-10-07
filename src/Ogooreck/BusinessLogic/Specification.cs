@@ -23,14 +23,14 @@ public class AggregateSpecification<TState>: AggregateSpecification<object, TSta
 }
 
 public class
-    HandlerSpecification<TEvent, TState>: DeciderSpecification<Func<TState, DecideResult<TEvent>>, TEvent, TState>
+    HandlerSpecification<TEvent, TState>: DeciderSpecification<Func<TState, TEvent[]>, TEvent, TState>
 {
-    public HandlerSpecification(Decider<Func<TState, DecideResult<TEvent>>, TEvent, TState> decider): base(decider) { }
+    public HandlerSpecification(Decider<Func<TState, TEvent[]>, TEvent, TState> decider): base(decider) { }
 }
 
 public class HandlerSpecification<TState>: HandlerSpecification<object, TState>
 {
-    public HandlerSpecification(Decider<Func<TState, DecideResult<object>>, object, TState> decider): base(decider) { }
+    public HandlerSpecification(Decider<Func<TState, object[]>, object, TState> decider): base(decider) { }
 }
 
 public class DeciderSpecification<TCommand, TEvent, TState>
@@ -163,7 +163,7 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
     }
 }
 
-public class Specification
+public static class Specification
 {
     public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
         Decider<TCommand, TEvent, TState> decider
@@ -280,27 +280,33 @@ public class Specification
         Func<TState>? getInitialState = null
     ) =>
         new(
-            new Decider<Func<TState, DecideResult<object>>, object, TState>(
+            new Decider<Func<TState, object[]>, object, TState>(
                 (handler, state) => handler(state),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
         );
 
+    public static WhenDeciderSpecificationBuilder<Func<TState, TEvent[]>, TEvent, TState> When<TEvent, TState>(
+        this GivenDeciderSpecificationBuilder<Func<TState, TEvent[]>, TEvent, TState> given,
+        Func<TState, TEvent> when
+    ) =>
+        given.When(state => new[] { when(state) });
+
+    public static WhenDeciderSpecificationBuilder<Func<TState, TEvent[]>, TEvent, TState> When<TEvent, TState>(
+        this GivenDeciderSpecificationBuilder<Func<TState, TEvent[]>, TEvent, TState> given,
+        Func<TEvent> when
+    ) =>
+        given.When(_ => new[] { when() });
+
+    public static WhenDeciderSpecificationBuilder<Func<TState, TEvent[]>, TEvent, TState> When<TEvent, TState>(
+        this GivenDeciderSpecificationBuilder<Func<TState, TEvent[]>, TEvent, TState> given,
+        Func<TEvent[]> when
+    ) =>
+        given.When(_ => when());
+
     internal record BusinessLogicThenResult<TState, TEvent>(
         TState CurrentState,
         TEvent[] NewEvents
     );
-
-    public record DecideResult<TEvent>(
-        TEvent[] Events
-    )
-    {
-        public static implicit operator DecideResult<TEvent>(TEvent @event) => new(new[] { @event });
-
-        public static implicit operator DecideResult<TEvent>(TEvent[] events) => new(events);
-
-        public static implicit operator TEvent[](DecideResult<TEvent> result) => result.Events;
-    }
 }
-
