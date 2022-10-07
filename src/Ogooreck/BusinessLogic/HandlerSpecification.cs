@@ -1,6 +1,4 @@
-﻿using Ogooreck.Factories;
-
-namespace Ogooreck.BusinessLogic;
+﻿namespace Ogooreck.BusinessLogic;
 #pragma warning disable CS1591
 public delegate DecideResult<TEvent, TState> Handler<TEvent, TState>(TState state);
 
@@ -24,55 +22,55 @@ public class HandlerSpecification<TEvent, TState>
 
 public static class HandlerSpecificationExtensions
 {
-    public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
+    public static ThenDeciderSpecificationBuilder<TEvent, TState>
         When<TEvent, TState>(
-            this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,
+            this WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> when,
             params Func<TState, TEvent>[] whens
         ) =>
-        given.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
+        when.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
 
-    public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
+    public static ThenDeciderSpecificationBuilder<TEvent, TState>
         When<TEvent, TState>(
-            this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,
+            this WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> when,
             params Func<TState, TEvent[]>[] whens
         ) =>
-        given.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
+        when.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
 
-    public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
+    public static ThenDeciderSpecificationBuilder<TEvent, TState>
         When<TEvent, TState>(
-            this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,
+            this WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> when,
             params Action<TState>[] whens
         ) =>
-        given.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
+        when.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
 
-    public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
+    public static ThenDeciderSpecificationBuilder<TEvent, TState>
         When<TEvent, TState>(
-            this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,
+            this WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> when,
             params Func<TState>[] whens
         ) =>
-        given.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
+        when.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
 
-    public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
+    public static ThenDeciderSpecificationBuilder<TEvent, TState>
         When<TEvent, TState>(
-            this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,
+            this WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> when,
             params Func<TState, TState>[] whens
         ) =>
-        given.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
+        when.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
 
 
-    public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
+    public static ThenDeciderSpecificationBuilder<TEvent, TState>
         When<TEvent, TState>(
-            this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,
+            this WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> when,
             params Func<TEvent[]>[] whens
         ) =>
-        given.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
+        when.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
 
-    public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
+    public static ThenDeciderSpecificationBuilder<TEvent, TState>
         When<TEvent, TState>(
-            this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,
+            this WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> when,
             params Func<TEvent>[] whens
         ) =>
-        given.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
+        when.When(whens.Select(WhenMapping<TEvent, TState>.ToHandler).ToArray());
 }
 
 public static class WhenMapping<TEvent, TState>
