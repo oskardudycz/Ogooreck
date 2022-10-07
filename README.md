@@ -16,13 +16,9 @@ Main assumptions:
 - testing frameworks and assert library agnostic,
 - keep things simple, but allow compositions and extension.
 
-Current available for API testing.
-
-TODO:
-- CQRS tests,
-- Aggregate Tests,
-- Event Sourcing tests,
-- Others.
+Current available for testing:
+- [Business Logic](#business-logic-testing),
+- [API](#api-testing).
 
 Check also [introduction post on my blog](https://event-driven.io/en/ogooreck_sneaky_bdd_testing_framework/).
 
