@@ -72,59 +72,23 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
         getResult = new Lazy<TestResult<TState, TEvent>>(Perform);
     }
 
-    public void Then(params TEvent[] expectedEvents)
-    {
-        var result = getResult.Value;
-        result.NewEvents.Should().BeEquivalentTo(expectedEvents);
-    }
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params TEvent[] expectedEvents) =>
+        new ThenDeciderSpecificationBuilder<TEvent, TState>(getResult).Then(expectedEvents);
 
-    public void Then(TState expectedState)
-    {
-        var result = getResult.Value;
-        result.CurrentState.Should().BeEquivalentTo(expectedState);
-    }
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(TState expectedState) =>
+        new ThenDeciderSpecificationBuilder<TEvent, TState>(getResult).Then(expectedState);
 
-    public void Then(params Action<TEvent[]>[] thens)
-    {
-        var result = getResult.Value;
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params Action<TEvent[]>[] eventsAssertions) =>
+        new ThenDeciderSpecificationBuilder<TEvent, TState>(getResult).Then(eventsAssertions);
 
-        foreach (var then in thens)
-        {
-            then(result.NewEvents);
-        }
-    }
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params Action<TState>[] stateAssertions) =>
+        new ThenDeciderSpecificationBuilder<TEvent, TState>(getResult).Then(stateAssertions);
 
-    public void Then(params Action<TState>[] thens)
-    {
-        var result = getResult.Value;
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params Action<TState, TEvent[]>[] assertions) =>
+        new ThenDeciderSpecificationBuilder<TEvent, TState>(getResult).Then(assertions);
 
-        foreach (var then in thens)
-        {
-            then(result.CurrentState);
-        }
-    }
-
-    public void Then(params Action<TState, TEvent[]>[] thens)
-    {
-        var result = getResult.Value;
-
-        foreach (var then in thens)
-        {
-            then(result.CurrentState, result.NewEvents);
-        }
-    }
-
-    public void ThenThrows<TException>(Action<TException>? assert = null) where TException : Exception
-    {
-        try
-        {
-            var _ = getResult.Value;
-        }
-        catch (TException e)
-        {
-            assert?.Invoke(e);
-        }
-    }
+    public void ThenThrows<TException>(Action<TException>? assert = null) where TException : Exception =>
+        new ThenDeciderSpecificationBuilder<TEvent, TState>(getResult).ThenThrows(assert);
 
     private TestResult<TState, TEvent> Perform()
     {
@@ -140,5 +104,78 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
         }
 
         return new TestResult<TState, TEvent>(currentState, resultEvents.ToArray());
+    }
+}
+
+public class ThenDeciderSpecificationBuilder<TEvent, TState>
+{
+    private readonly Lazy<TestResult<TState, TEvent>> getResult;
+
+    public ThenDeciderSpecificationBuilder(Lazy<TestResult<TState, TEvent>> getResult) =>
+        this.getResult = getResult;
+
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params TEvent[] expectedEvents)
+    {
+        var result = getResult.Value;
+        result.NewEvents.Should().BeEquivalentTo(expectedEvents);
+        return this;
+    }
+
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(TState expectedState)
+    {
+        var result = getResult.Value;
+        result.CurrentState.Should().BeEquivalentTo(expectedState);
+        return this;
+    }
+
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params Action<TEvent[]>[] eventsAssertions)
+    {
+        var result = getResult.Value;
+
+        foreach (var then in eventsAssertions)
+        {
+            then(result.NewEvents);
+        }
+
+        return this;
+    }
+
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params Action<TState>[] stateAssertions)
+    {
+        var result = getResult.Value;
+
+        foreach (var then in stateAssertions)
+        {
+            then(result.CurrentState);
+        }
+
+        return this;
+    }
+
+    public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params Action<TState, TEvent[]>[] assertions)
+    {
+        var result = getResult.Value;
+
+        foreach (var then in assertions)
+        {
+            then(result.CurrentState, result.NewEvents);
+        }
+
+        return this;
+    }
+
+    public ThenDeciderSpecificationBuilder<TEvent, TState> ThenThrows<TException>(Action<TException>? assert = null)
+        where TException : Exception
+    {
+        try
+        {
+            var _ = getResult.Value;
+        }
+        catch (TException e)
+        {
+            assert?.Invoke(e);
+        }
+
+        return this;
     }
 }

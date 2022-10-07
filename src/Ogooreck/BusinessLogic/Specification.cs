@@ -1,6 +1,4 @@
-﻿using Ogooreck.Factories;
-
-namespace Ogooreck.BusinessLogic;
+﻿namespace Ogooreck.BusinessLogic;
 #pragma warning disable CS1591
 
 public static class Specification
@@ -78,7 +76,7 @@ public static class Specification
         );
 }
 
-internal record TestResult<TState, TEvent>(
+public record TestResult<TState, TEvent>(
     TState CurrentState,
     TEvent[] NewEvents
 );
