@@ -36,6 +36,424 @@ Feel free to [create an issue](https://github.com/oskardudycz/Ogooreck/issues/ne
 
 ⭐ Star on GitHub or sharing with your friends will also help!
 
+## Business Logic Testing
+
+Ogooreck provides a set of helpers to set up business logic tests. It's recommended to add such using to your tests:
+
+```csharp
+using Ogooreck.BusinessLogic;
+```
+
+### Decider and Command Handling tests
+
+You can use `DeciderSpecification` to run decider and command handling tests. See the example:
+
+```csharp
+using FluentAssertions;
+using Ogooreck.BusinessLogic;
+
+namespace Ogooreck.Sample.BusinessLogic.Tests.Deciders;
+
+using static BankAccountEventsBuilder;
+
+public class BankAccountTests
+{
+    private readonly Random random = new();
+    private static readonly DateTimeOffset now = DateTimeOffset.UtcNow;
+
+    private readonly DeciderSpecification<BankAccount> Spec = Specification.For<BankAccount>(
+        (command, bankAccount) => BankAccountDecider.Handle(() => now, command, bankAccount),
+        BankAccount.Evolve
+    );
+
+    [Fact]
+    public void GivenNonExistingBankAccount_WhenOpenWithValidParams_ThenSucceeds()
+    {
+        var bankAccountId = Guid.NewGuid();
+        var accountNumber = Guid.NewGuid().ToString();
+        var clientId = Guid.NewGuid();
+        var currencyISOCode = "USD";
+
+        Spec.Given()
+            .When(new OpenBankAccount(bankAccountId, accountNumber, clientId, currencyISOCode))
+            .Then(new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1));
+    }
+
+    [Fact]
+    public void GivenOpenBankAccount_WhenRecordDepositWithValidParams_ThenSucceeds()
+    {
+        var bankAccountId = Guid.NewGuid();
+
+        var amount = (decimal)random.NextDouble();
+        var cashierId = Guid.NewGuid();
+
+        Spec.Given(BankAccountOpened(bankAccountId, now, 1))
+            .When(new RecordDeposit(amount, cashierId))
+            .Then(new DepositRecorded(bankAccountId, amount, cashierId, now, 2));
+    }
+
+    [Fact]
+    public void GivenClosedBankAccount_WhenRecordDepositWithValidParams_ThenFailsWithInvalidOperationException()
+    {
+        var bankAccountId = Guid.NewGuid();
+
+        var amount = (decimal)random.NextDouble();
+        var cashierId = Guid.NewGuid();
+
+        Spec.Given(
+                BankAccountOpened(bankAccountId, now, 1),
+                BankAccountClosed(bankAccountId, now, 2)
+            )
+            .When(new RecordDeposit(amount, cashierId))
+            .ThenThrows<InvalidOperationException>(exception => exception.Message.Should().Be("Account is closed!"));
+    }
+}
+
+public static class BankAccountEventsBuilder
+{
+    public static BankAccountOpened BankAccountOpened(Guid bankAccountId, DateTimeOffset now, long version)
+    {
+        var accountNumber = Guid.NewGuid().ToString();
+        var clientId = Guid.NewGuid();
+        var currencyISOCode = "USD";
+
+        return new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, version);
+    }
+
+    public static BankAccountClosed BankAccountClosed(Guid bankAccountId, DateTimeOffset now, long version)
+    {
+        var reason = Guid.NewGuid().ToString();
+
+        return new BankAccountClosed(bankAccountId, reason, now, version);
+    }
+}
+```
+
+See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs).
+
+### Event-Sourced command handlers
+
+You can use `HandlerSpecification` to run event-sourced command handling tests for pure functions and entities. See the example:
+
+```csharp
+using Ogooreck.BusinessLogic;
+
+namespace Ogooreck.Sample.BusinessLogic.Tests.Functions.EventSourced;
+
+using static IncidentEventsBuilder;
+using static IncidentService;
+
+public class IncidentTests
+{
+    private static readonly DateTimeOffset now = DateTimeOffset.UtcNow;
+
+    private static readonly Func<Incident, object, Incident> evolve =
+        (incident, @event) =>
+        {
+            return @event switch
+            {
+                IncidentLogged logged => Incident.Create(logged),
+                IncidentCategorised categorised => incident.Apply(categorised),
+                IncidentPrioritised prioritised => incident.Apply(prioritised),
+                AgentRespondedToIncident agentResponded => incident.Apply(agentResponded),
+                CustomerRespondedToIncident customerResponded => incident.Apply(customerResponded),
+                IncidentResolved resolved => incident.Apply(resolved),
+                ResolutionAcknowledgedByCustomer acknowledged => incident.Apply(acknowledged),
+                IncidentClosed closed => incident.Apply(closed),
+                _ => incident
+            };
+        };
+
+    private readonly HandlerSpecification<Incident> Spec = Specification.For<Incident>(evolve);
+
+    [Fact]
+    public void GivenNonExistingIncident_WhenOpenWithValidParams_ThenSucceeds()
+    {
+        var incidentId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var contact = new Contact(ContactChannel.Email, EmailAddress: "john@doe.com");
+        var description = Guid.NewGuid().ToString();
+        var loggedBy = Guid.NewGuid();
+
+        Spec.Given()
+            .When(() => Handle(() => now, new LogIncident(incidentId, customerId, contact, description, loggedBy)))
+            .Then(new IncidentLogged(incidentId, customerId, contact, description, loggedBy, now));
+    }
+
+    [Fact]
+    public void GivenOpenIncident_WhenCategoriseWithValidParams_ThenSucceeds()
+    {
+        var incidentId = Guid.NewGuid();
+
+        var category = IncidentCategory.Database;
+        var categorisedBy = Guid.NewGuid();
+
+        Spec.Given(IncidentLogged(incidentId, now))
+            .When(incident => Handle(() => now, incident, new CategoriseIncident(incidentId, category, categorisedBy)))
+            .Then(new IncidentCategorised(incidentId, category, categorisedBy, now));
+    }
+}
+
+public static class IncidentEventsBuilder
+{
+    public static IncidentLogged IncidentLogged(Guid incidentId, DateTimeOffset now)
+    {
+        var customerId = Guid.NewGuid();
+        var contact = new Contact(ContactChannel.Email, EmailAddress: "john@doe.com");
+        var description = Guid.NewGuid().ToString();
+        var loggedBy = Guid.NewGuid();
+
+        return new IncidentLogged(incidentId, customerId, contact, description, loggedBy, now);
+    }
+}
+```
+
+See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
+
+### State-based command handlers
+
+You can use `HandlerSpecification` to run state-based command handling tests for pure functions and entities. See the example:
+
+```csharp
+using Ogooreck.BusinessLogic;
+
+namespace Ogooreck.Sample.BusinessLogic.Tests.Functions.StateBased;
+
+using static IncidentEventsBuilder;
+using static IncidentService;
+
+public class IncidentTests
+{
+    private static readonly DateTimeOffset now = DateTimeOffset.UtcNow;
+
+    private readonly HandlerSpecification<Incident> Spec = Specification.For<Incident>();
+
+    [Fact]
+    public void GivenNonExistingIncident_WhenOpenWithValidParams_ThenSucceeds()
+    {
+        var incidentId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var contact = new Contact(ContactChannel.Email, EmailAddress: "john@doe.com");
+        var description = Guid.NewGuid().ToString();
+        var loggedBy = Guid.NewGuid();
+
+        Spec.Given()
+            .When(() => Handle(() => now, new LogIncident(incidentId, customerId, contact, description, loggedBy)))
+            .Then(new Incident(incidentId, customerId, contact, loggedBy, now, description));
+    }
+
+    [Fact]
+    public void GivenOpenIncident_WhenCategoriseWithValidParams_ThenSucceeds()
+    {
+        var incidentId = Guid.NewGuid();
+        var loggedIncident = LoggedIncident(incidentId, now);
+
+        var category = IncidentCategory.Database;
+        var categorisedBy = Guid.NewGuid();
+
+        Spec.Given(loggedIncident)
+            .When(incident => Handle(() => now, incident, new CategoriseIncident(incidentId, category, categorisedBy)))
+            .Then(loggedIncident with { Category = category });
+    }
+}
+
+public static class IncidentEventsBuilder
+{
+    public static Incident LoggedIncident(Guid incidentId, DateTimeOffset now)
+    {
+        var customerId = Guid.NewGuid();
+        var contact = new Contact(ContactChannel.Email, EmailAddress: "john@doe.com");
+        var description = Guid.NewGuid().ToString();
+        var loggedBy = Guid.NewGuid();
+
+        return new Incident(incidentId, customerId, contact, loggedBy, now, description);
+    }
+}
+
+```
+
+See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
+
+
+### Event-Driven Aggregate tests
+
+You can use `HandlerSpecification` to run event-driven aggregat tests. See the example:
+
+```csharp
+using Ogooreck.BusinessLogic;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Core;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Pricing;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Products;
+using Ogooreck.Sample.BusinessLogic.Tests.Functions.EventSourced;
+
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced;
+
+using static ShoppingCartEventsBuilder;
+using static ProductItemBuilder;
+using static AggregateTestExtensions<ShoppingCart>;
+
+public class ShoppingCartTests
+{
+    private readonly Random random = new();
+
+    private readonly HandlerSpecification<ShoppingCart> Spec =
+        Specification.For<ShoppingCart>(Handle, ShoppingCart.Evolve);
+
+    private class DummyProductPriceCalculator: IProductPriceCalculator
+    {
+        private readonly decimal price;
+
+        public DummyProductPriceCalculator(decimal price) => this.price = price;
+
+        public IReadOnlyList<PricedProductItem> Calculate(params ProductItem[] productItems) =>
+            productItems.Select(pi => PricedProductItem.For(pi, price)).ToList();
+    }
+
+    [Fact]
+    public void GivenNonExistingShoppingCart_WhenOpenWithValidParams_ThenSucceeds()
+    {
+        var shoppingCartId = Guid.NewGuid();
+        var clientId = Guid.NewGuid();
+
+        Spec.Given()
+            .When(() => ShoppingCart.Open(shoppingCartId, clientId))
+            .Then(new ShoppingCartOpened(shoppingCartId, clientId));
+    }
+
+    [Fact]
+    public void GivenOpenShoppingCart_WhenAddProductWithValidParams_ThenSucceeds()
+    {
+        var shoppingCartId = Guid.NewGuid();
+
+        var productItem = ValidProductItem();
+        var price = random.Next(1, 1000);
+        var priceCalculator = new DummyProductPriceCalculator(price);
+
+        Spec.Given(ShoppingCartOpened(shoppingCartId))
+            .When(cart => cart.AddProduct(priceCalculator, productItem))
+            .Then(new ProductAdded(shoppingCartId, PricedProductItem.For(productItem, price)));
+    }
+}
+
+public static class ShoppingCartEventsBuilder
+{
+    public static ShoppingCartOpened ShoppingCartOpened(Guid shoppingCartId)
+    {
+        var clientId = Guid.NewGuid();
+
+        return new ShoppingCartOpened(shoppingCartId, clientId);
+    }
+}
+
+public static class ProductItemBuilder
+{
+    private static readonly Random Random = new();
+
+    public static ProductItem ValidProductItem() =>
+        ProductItem.From(Guid.NewGuid(), Random.Next(1, 100));
+}
+
+public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggregate
+{
+    public static DecideResult<object, TAggregate> Handle(Handler<object, TAggregate> handle, TAggregate aggregate)
+    {
+        var result = handle(aggregate);
+        var updatedAggregate = result.NewState ?? aggregate;
+        return DecideResult.For(updatedAggregate, updatedAggregate.DequeueUncommittedEvents());
+    }
+}
+```
+
+See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/EventSourced/ShoppingCartTests.cs).
+
+### State-based Aggregate tests
+
+You can use `HandlerSpecification` to run event-driven aggregat tests. See the example:
+
+```csharp
+using FluentAssertions;
+using Ogooreck.BusinessLogic;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Pricing;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Products;
+
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased;
+
+using static ShoppingCartEventsBuilder;
+using static ProductItemBuilder;
+
+public class ShoppingCartTests
+{
+    private readonly Random random = new();
+
+    private readonly HandlerSpecification<ShoppingCart> Spec = Specification.For<ShoppingCart>();
+
+    private class DummyProductPriceCalculator: IProductPriceCalculator
+    {
+        private readonly decimal price;
+
+        public DummyProductPriceCalculator(decimal price) => this.price = price;
+
+        public IReadOnlyList<PricedProductItem> Calculate(params ProductItem[] productItems) =>
+            productItems.Select(pi => PricedProductItem.For(pi, price)).ToList();
+    }
+
+    [Fact]
+    public void GivenNonExistingShoppingCart_WhenOpenWithValidParams_ThenSucceeds()
+    {
+        var shoppingCartId = Guid.NewGuid();
+        var clientId = Guid.NewGuid();
+
+        Spec.Given()
+            .When(() => ShoppingCart.Open(shoppingCartId, clientId))
+            .Then((state, _) =>
+            {
+                state.Id.Should().Be(shoppingCartId);
+                state.ClientId.Should().Be(clientId);
+                state.ProductItems.Should().BeEmpty();
+                state.Status.Should().Be(ShoppingCartStatus.Pending);
+                state.TotalPrice.Should().Be(0);
+            });
+    }
+
+    [Fact]
+    public void GivenOpenShoppingCart_WhenAddProductWithValidParams_ThenSucceeds()
+    {
+        var shoppingCartId = Guid.NewGuid();
+
+        var productItem = ValidProductItem();
+        var price = random.Next(1, 1000);
+        var priceCalculator = new DummyProductPriceCalculator(price);
+
+        Spec.Given(OpenedShoppingCart(shoppingCartId))
+            .When(cart => cart.AddProduct(priceCalculator, productItem))
+            .Then((state, _) =>
+            {
+                state.ProductItems.Should().NotBeEmpty();
+                state.ProductItems.Single().Should().Be(PricedProductItem.For(productItem, price));
+            });
+    }
+}
+
+public static class ShoppingCartEventsBuilder
+{
+    public static ShoppingCart OpenedShoppingCart(Guid shoppingCartId)
+    {
+        var clientId = Guid.NewGuid();
+
+        return ShoppingCart.Open(shoppingCartId, clientId);
+    }
+}
+
+public static class ProductItemBuilder
+{
+    private static readonly Random Random = new();
+
+    public static ProductItem ValidProductItem() =>
+        ProductItem.From(Guid.NewGuid(), Random.Next(1, 100));
+}
+```
+
+See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs).
 
 ## API Testing
 
