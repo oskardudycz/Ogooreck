@@ -1,9 +1,9 @@
 using FluentAssertions;
 using Ogooreck.BusinessLogic;
-using Ogooreck.Sample.BusinessLogic.Aggregates.StateBased.Pricing;
-using Ogooreck.Sample.BusinessLogic.Aggregates.StateBased.Products;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Pricing;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Products;
 
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.StateBased;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased;
 
 using static ShoppingCartEventsBuilder;
 using static ProductItemBuilder;

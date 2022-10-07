@@ -1,6 +1,6 @@
-using Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced.Products;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Products;
 
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced.Pricing;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Pricing;
 
 public interface IProductPriceCalculator
 {

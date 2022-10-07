@@ -1,6 +1,6 @@
-using Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced.Products;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Products;
 
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced;
 
 public record ShoppingCartOpened(
     Guid CartId,

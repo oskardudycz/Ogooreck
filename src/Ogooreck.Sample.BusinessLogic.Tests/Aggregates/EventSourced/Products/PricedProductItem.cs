@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced.Products;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Products;
 
 public record PricedProductItem
 {

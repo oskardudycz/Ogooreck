@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced.Core;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Core;
 
 public static class ListExtensions
 {

@@ -1,9 +1,9 @@
 using Ogooreck.BusinessLogic;
-using Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced.Core;
-using Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced.Pricing;
-using Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced.Products;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Core;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Pricing;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Products;
 
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.EventSourced;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced;
 
 using static ShoppingCartEventsBuilder;
 using static ProductItemBuilder;
@@ -96,10 +96,10 @@ public static class ProductItemBuilder
 
 public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggregate
 {
-    public static DecideResult<object, TAggregate> Handle(Func<TAggregate, DecideResult<object, TAggregate>> handle, TAggregate aggregate)
+    public static DecideResult<object, TAggregate> Handle(Handler<object, TAggregate> handle, TAggregate aggregate)
     {
         var result = handle(aggregate);
         var updatedAggregate = result.CurrentState ?? aggregate;
-        return new DecideResult<object, TAggregate>(updatedAggregate.DequeueUncommittedEvents(), updatedAggregate);
+        return DecideResult.For(updatedAggregate, updatedAggregate.DequeueUncommittedEvents());
     }
 }

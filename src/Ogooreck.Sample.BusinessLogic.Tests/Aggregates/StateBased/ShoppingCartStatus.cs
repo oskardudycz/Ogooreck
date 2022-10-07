@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.StateBased;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased;
 
 public enum ShoppingCartStatus
 {

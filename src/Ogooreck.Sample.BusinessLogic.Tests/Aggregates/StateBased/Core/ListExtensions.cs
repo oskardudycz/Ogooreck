@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.StateBased.Core;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Core;
 
 public static class ListExtensions
 {

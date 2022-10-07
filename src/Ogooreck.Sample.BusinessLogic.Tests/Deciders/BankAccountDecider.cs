@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.BusinessLogic.Deciders;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Deciders;
 
 public record OpenBankAccount(
     Guid BankAccountId,

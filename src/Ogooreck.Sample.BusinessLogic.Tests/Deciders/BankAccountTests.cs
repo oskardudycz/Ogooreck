@@ -1,7 +1,7 @@
 using FluentAssertions;
 using Ogooreck.BusinessLogic;
 
-namespace Ogooreck.Sample.BusinessLogic.Deciders;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Deciders;
 
 using static BankAccountEventsBuilder;
 

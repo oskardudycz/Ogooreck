@@ -1,6 +1,6 @@
-using Ogooreck.Sample.BusinessLogic.Aggregates.StateBased.Products;
+using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Products;
 
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.StateBased.Pricing;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Pricing;
 
 public interface IProductPriceCalculator
 {

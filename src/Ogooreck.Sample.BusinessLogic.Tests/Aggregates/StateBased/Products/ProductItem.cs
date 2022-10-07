@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.BusinessLogic.Aggregates.StateBased.Products;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Products;
 
 public record ProductItem
 {
