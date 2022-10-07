@@ -78,7 +78,7 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
     private readonly Decider<TCommand, TEvent, TState> decider;
     private readonly TCommand[] commands;
     private readonly Func<TState>? getCurrentState;
-    private readonly Lazy<BusinessLogicThenResult<TState, TEvent>> getResult;
+    private readonly Lazy<BusinessLogicResult<TState, TEvent>> getResult;
 
     public WhenDeciderSpecificationBuilder(
         Decider<TCommand, TEvent, TState> decider,
@@ -89,7 +89,7 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
         this.decider = decider;
         this.commands = commands;
         this.getCurrentState = getCurrentState;
-        getResult = new Lazy<BusinessLogicThenResult<TState, TEvent>>(Perform);
+        getResult = new Lazy<BusinessLogicResult<TState, TEvent>>(Perform);
     }
 
     public void Then(params TEvent[] expectedEvents)
@@ -146,20 +146,20 @@ public class WhenDeciderSpecificationBuilder<TCommand, TEvent, TState>
         }
     }
 
-    private BusinessLogicThenResult<TState, TEvent> Perform()
+    private BusinessLogicResult<TState, TEvent> Perform()
     {
         var currentState = (getCurrentState ?? decider.GetInitialState)();
         var resultEvents = new List<TEvent>();
 
         foreach (var command in commands)
         {
-            var newEvents = decider.Decide(command, currentState);
+            var (newEvents, state) = decider.Decide(command, currentState);
             resultEvents.AddRange(newEvents);
 
-            currentState = newEvents.Aggregate(currentState, decider.Evolve);
+            currentState = state ?? newEvents.Aggregate(currentState, decider.Evolve);
         }
 
-        return new BusinessLogicThenResult<TState, TEvent>(currentState, resultEvents.ToArray());
+        return new BusinessLogicResult<TState, TEvent>(currentState, resultEvents.ToArray());
     }
 }
 
@@ -174,10 +174,15 @@ public static class Specification
         Func<TCommand, TState, TEvent[]> decide,
         Func<TState, TEvent, TState> evolve,
         Func<TState>? getInitialState = null
-    ) =>
+    ) where TState : notnull =>
         For(
             new Decider<TCommand, TEvent, TState>(
-                (command, currentState) => decide(command, currentState),
+                (command, currentState) =>
+                {
+                    var newEvents = decide(command, currentState);
+
+                    return new DecideResult<TEvent, TState>(newEvents);
+                },
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -190,7 +195,7 @@ public static class Specification
     ) =>
         For(
             new Decider<TCommand, TEvent, TState>(
-                (command, currentState) => new[] { decide(command, currentState) },
+                (command, currentState) => DecideResult<TEvent, TState>.For(decide(command, currentState)),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -203,7 +208,7 @@ public static class Specification
     ) =>
         For(
             new Decider<Action<TState>, TEvent, TState>(
-                (command, currentState) => new[] { decide(command, currentState) },
+                (command, currentState) => DecideResult<TEvent, TState>.For(decide(command, currentState)),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -216,7 +221,7 @@ public static class Specification
     ) =>
         For(
             new Decider<Action<TState>, TEvent, TState>(
-                (command, currentState) => decide(command, currentState),
+                (command, currentState) => DecideResult<TEvent, TState>.For(decide(command, currentState)),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -229,7 +234,7 @@ public static class Specification
     ) =>
         new(
             new Decider<object, object, TState>(
-                (command, state) => new[] { decide(command, state) },
+                (command, currentState) => DecideResult<object, TState>.For(decide(command, currentState)),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -242,7 +247,7 @@ public static class Specification
     ) =>
         new(
             new Decider<object, object, TState>(
-                decide,
+                (command, currentState) => DecideResult<object, TState>.For(decide(command, currentState)),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -255,7 +260,7 @@ public static class Specification
     ) =>
         new(
             new Decider<Action<TState>, object, TState>(
-                (command, state) => new[] { decide(command, state) },
+                (command, currentState) => DecideResult<object, TState>.For(decide(command, currentState)),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -268,7 +273,7 @@ public static class Specification
     ) =>
         new(
             new Decider<Action<TState>, object, TState>(
-                decide,
+                (command, currentState) => DecideResult<object, TState>.For(decide(command, currentState)),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -281,7 +286,8 @@ public static class Specification
     ) =>
         new(
             new Decider<Func<TState, object[]>, object, TState>(
-                (handler, state) => handler(state),
+
+                (handler, currentState) => DecideResult<object, TState>.For(handler(currentState)),
                 evolve,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
@@ -305,7 +311,7 @@ public static class Specification
     ) =>
         given.When(_ => when());
 
-    internal record BusinessLogicThenResult<TState, TEvent>(
+    internal record BusinessLogicResult<TState, TEvent>(
         TState CurrentState,
         TEvent[] NewEvents
     );
