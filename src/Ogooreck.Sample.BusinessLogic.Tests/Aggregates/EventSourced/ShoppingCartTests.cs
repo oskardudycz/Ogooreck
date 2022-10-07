@@ -2,6 +2,7 @@ using Ogooreck.BusinessLogic;
 using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Core;
 using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Pricing;
 using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Products;
+using Ogooreck.Sample.BusinessLogic.Tests.Functions.EventSourced;
 
 namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced;
 
@@ -67,7 +68,7 @@ public class ShoppingCartTests
         var shoppingCartId = Guid.NewGuid();
 
         var productItem = ValidProductItem();
-        var price = random.Next(1000);
+        var price = random.Next(1, 1000);
         var priceCalculator = new DummyProductPriceCalculator(price);
 
         Spec.Given(ShoppingCartOpened(shoppingCartId))
@@ -91,7 +92,7 @@ public static class ProductItemBuilder
     private static readonly Random Random = new();
 
     public static ProductItem ValidProductItem() =>
-        ProductItem.From(Guid.NewGuid(), Random.Next(100));
+        ProductItem.From(Guid.NewGuid(), Random.Next(1, 100));
 }
 
 public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggregate

@@ -25,29 +25,6 @@ public class HandlerSpecification<TEvent, TState>
 
 public static class HandlerSpecificationExtensions
 {
-    public static HandlerSpecification<TState> For<TState>(
-        Func<TState, object, TState> evolve,
-        Func<TState>? getInitialState = null
-    ) =>
-        new(
-            new Decider<Handler<object, TState>, object, TState>(
-                (handler, currentState) => handler(currentState),
-                evolve,
-                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
-            )
-        );
-
-    public static HandlerSpecification<TState> For<TState>(
-        Func<TState>? getInitialState = null
-    ) =>
-        new(
-            new Decider<Handler<object, TState>, object, TState>(
-                (handler, currentState) => handler(currentState),
-                (state, _) => state,
-                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
-            )
-        );
-
     public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
         When<TEvent, TState>(
             this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,

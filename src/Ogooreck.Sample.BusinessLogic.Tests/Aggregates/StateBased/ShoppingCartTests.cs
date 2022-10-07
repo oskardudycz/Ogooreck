@@ -48,7 +48,7 @@ public class ShoppingCartTests
         var shoppingCartId = Guid.NewGuid();
 
         var productItem = ValidProductItem();
-        var price = random.Next(1000);
+        var price = random.Next(1, 1000);
         var priceCalculator = new DummyProductPriceCalculator(price);
 
         Spec.Given(OpenedShoppingCart(shoppingCartId))
@@ -76,5 +76,5 @@ public static class ProductItemBuilder
     private static readonly Random Random = new();
 
     public static ProductItem ValidProductItem() =>
-        ProductItem.From(Guid.NewGuid(), Random.Next(100));
+        ProductItem.From(Guid.NewGuid(), Random.Next(1, 100));
 }

@@ -26,7 +26,7 @@ public class IncidentTests
             };
         };
 
-    private readonly HandlerSpecification<Incident> Spec = Specification.For(evolve);
+    private readonly HandlerSpecification<Incident> Spec = Specification.For<Incident>(evolve);
 
     [Fact]
     public void GivenNonExistingIncident_WhenOpenWithValidParams_ThenSucceeds()
