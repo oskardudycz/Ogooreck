@@ -100,7 +100,7 @@ public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggre
     public static DecideResult<object, TAggregate> Handle(Handler<object, TAggregate> handle, TAggregate aggregate)
     {
         var result = handle(aggregate);
-        var updatedAggregate = result.CurrentState ?? aggregate;
+        var updatedAggregate = result.NewState ?? aggregate;
         return DecideResult.For(updatedAggregate, updatedAggregate.DequeueUncommittedEvents());
     }
 }
