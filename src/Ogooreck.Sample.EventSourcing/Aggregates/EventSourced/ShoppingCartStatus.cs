@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.EventSourcing.Aggregates;
+namespace Ogooreck.Sample.EventSourcing.Aggregates.EventSourced;
 
 public enum ShoppingCartStatus
 {

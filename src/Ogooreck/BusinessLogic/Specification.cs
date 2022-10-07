@@ -16,13 +16,19 @@ public class DeciderSpecification<TState>
 public class AggregateSpecification<TEvent, TState>
     : DeciderSpecification<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState>
 {
-    public AggregateSpecification(Decider<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> decider): base(decider) { }
+    public AggregateSpecification(Decider<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> decider):
+        base(decider)
+    {
+    }
 }
 
 public class AggregateSpecification<TState>
     : AggregateSpecification<object, TState>
 {
-    public AggregateSpecification(Decider<Func<TState, DecideResult<object, TState>>, object, TState> decider): base(decider) { }
+    public AggregateSpecification(Decider<Func<TState, DecideResult<object, TState>>, object, TState> decider):
+        base(decider)
+    {
+    }
 }
 
 public class DeciderSpecification<TCommand, TEvent, TState>
@@ -39,6 +45,9 @@ public class DeciderSpecification<TCommand, TEvent, TState>
 
             return events.Aggregate(currentState, decider.Evolve);
         });
+
+    public GivenDeciderSpecificationBuilder<TCommand, TEvent, TState> Given(TState currentState) =>
+        Given(() => currentState);
 
     public GivenDeciderSpecificationBuilder<TCommand, TEvent, TState> Given() =>
         new(decider);
@@ -246,7 +255,7 @@ public static class Specification
         );
 
     public static AggregateSpecification<TState> For<TState>(
-        Func<Func<TState, DecideResult<object, TState>>, TState,  DecideResult<object, TState>> decide,
+        Func<Func<TState, DecideResult<object, TState>>, TState, DecideResult<object, TState>> decide,
         Func<TState, object, TState> evolve,
         Func<TState>? getInitialState = null
     ) =>
@@ -258,44 +267,50 @@ public static class Specification
             )
         );
 
-    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> When<TEvent, TState>(
-        this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
-        Func<TState, TEvent> when
-    ) =>
+    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState>
+        When<TEvent, TState>(
+            this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
+            Func<TState, TEvent> when
+        ) =>
         given.When(state => DecideResult<TEvent, TState>.For(when(state)));
 
-    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> When<TEvent, TState>(
-        this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
-        Func<TState, TEvent[]> when
-    ) =>
+    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState>
+        When<TEvent, TState>(
+            this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
+            Func<TState, TEvent[]> when
+        ) =>
         given.When(state => DecideResult<TEvent, TState>.For(when(state)));
 
-    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> When<TEvent, TState>(
-        this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
-        Action<TState> when
-    ) =>
+    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState>
+        When<TEvent, TState>(
+            this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
+            Action<TState> when
+        ) =>
         given.When(state =>
         {
             when(state);
             return DecideResult<TEvent, TState>.For(state);
         });
 
-    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> When<TEvent, TState>(
-        this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
-        Func<TState> when
-    ) =>
+    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState>
+        When<TEvent, TState>(
+            this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
+            Func<TState> when
+        ) =>
         given.When(_ => DecideResult<TEvent, TState>.For(when()));
 
-    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> When<TEvent, TState>(
-        this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
-        Func<TEvent[]> when
-    ) =>
+    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState>
+        When<TEvent, TState>(
+            this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
+            Func<TEvent[]> when
+        ) =>
         given.When(_ => DecideResult<TEvent, TState>.For(when()));
 
-    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> When<TEvent, TState>(
-        this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
-        Func<TEvent> when
-    ) =>
+    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState>
+        When<TEvent, TState>(
+            this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
+            Func<TEvent> when
+        ) =>
         given.When(_ => DecideResult<TEvent, TState>.For(when()));
 
 
@@ -305,9 +320,20 @@ public static class Specification
     ) =>
         new(
             new Decider<Func<TState, DecideResult<object, TState>>, object, TState>(
-
-                (handler, currentState) => DecideResult<object, TState>.For(handler(currentState)),
+                (handler, currentState) => handler(currentState),
                 evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
+
+    public static AggregateSpecification<TState> For<TState>(
+        Func<TState>? getInitialState = null
+    ) =>
+        new(
+            new Decider<Func<TState, DecideResult<object, TState>>, object, TState>(
+                (handler, currentState) => handler(currentState),
+                (state, _) => state,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
         );

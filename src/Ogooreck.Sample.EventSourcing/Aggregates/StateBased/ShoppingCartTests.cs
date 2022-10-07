@@ -1,44 +1,19 @@
+using FluentAssertions;
 using Ogooreck.BusinessLogic;
-using Ogooreck.Sample.EventSourcing.Aggregates.Core;
-using Ogooreck.Sample.EventSourcing.Aggregates.Pricing;
-using Ogooreck.Sample.EventSourcing.Aggregates.Products;
+using Ogooreck.Sample.EventSourcing.Aggregates.StateBased.Core;
+using Ogooreck.Sample.EventSourcing.Aggregates.StateBased.Pricing;
+using Ogooreck.Sample.EventSourcing.Aggregates.StateBased.Products;
 
-namespace Ogooreck.Sample.EventSourcing.Aggregates;
+namespace Ogooreck.Sample.EventSourcing.Aggregates.StateBased;
 
 using static ShoppingCartEventsBuilder;
 using static ProductItemBuilder;
-using static AggregateTestExtensions<ShoppingCart>;
 
 public class ShoppingCartTests
 {
     private readonly Random random = new();
 
-    private static readonly Func<ShoppingCart, object, ShoppingCart> evolve =
-        (cart, @event) =>
-        {
-            switch (@event)
-            {
-                case ShoppingCartOpened opened:
-                    cart.Apply(opened);
-                    break;
-                case ProductAdded productAdded:
-                    cart.Apply(productAdded);
-                    break;
-                case ProductRemoved productRemoved:
-                    cart.Apply(productRemoved);
-                    break;
-                case ShoppingCartConfirmed confirmed:
-                    cart.Apply(confirmed);
-                    break;
-                case ShoppingCartCanceled canceled:
-                    cart.Apply(canceled);
-                    break;
-            }
-
-            return cart;
-        };
-
-    private readonly AggregateSpecification<ShoppingCart> Spec = Specification.For(Handle, evolve);
+    private readonly AggregateSpecification<ShoppingCart> Spec = Specification.For<ShoppingCart>();
 
     private class DummyProductPriceCalculator: IProductPriceCalculator
     {
@@ -58,7 +33,14 @@ public class ShoppingCartTests
 
         Spec.Given()
             .When(() => ShoppingCart.Open(shoppingCartId, clientId))
-            .Then(new ShoppingCartOpened(shoppingCartId, clientId));
+            .Then((state, _) =>
+            {
+                state.Id.Should().Be(shoppingCartId);
+                state.ClientId.Should().Be(clientId);
+                state.ProductItems.Should().BeEmpty();
+                state.Status.Should().Be(ShoppingCartStatus.Pending);
+                state.TotalPrice.Should().Be(0);
+            });
     }
 
     [Fact]
@@ -70,19 +52,23 @@ public class ShoppingCartTests
         var price = random.Next(1000);
         var priceCalculator = new DummyProductPriceCalculator(price);
 
-        Spec.Given(ShoppingCartOpened(shoppingCartId))
+        Spec.Given(OpenedShoppingCart(shoppingCartId))
             .When(cart => cart.AddProduct(priceCalculator, productItem))
-            .Then(new ProductAdded(shoppingCartId, PricedProductItem.For(productItem, price)));
+            .Then((state, _) =>
+            {
+                state.ProductItems.Should().NotBeEmpty();
+                state.ProductItems.Single().Should().Be(PricedProductItem.For(productItem, price));
+            });
     }
 }
 
 public static class ShoppingCartEventsBuilder
 {
-    public static ShoppingCartOpened ShoppingCartOpened(Guid shoppingCartId)
+    public static ShoppingCart OpenedShoppingCart(Guid shoppingCartId)
     {
         var clientId = Guid.NewGuid();
 
-        return new ShoppingCartOpened(shoppingCartId, clientId);
+        return ShoppingCart.Open(shoppingCartId, clientId);
     }
 }
 
@@ -100,6 +86,6 @@ public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggre
     {
         var result = handle(aggregate);
         var updatedAggregate = result.CurrentState ?? aggregate;
-        return new DecideResult<object, TAggregate>(updatedAggregate.DequeueUncommittedEvents(), updatedAggregate);
+        return DecideResult<object, TAggregate>.For(updatedAggregate);
     }
 }

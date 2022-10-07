@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.EventSourcing.Aggregates.Core;
+namespace Ogooreck.Sample.EventSourcing.Aggregates.EventSourced.Core;
 
 public abstract class Aggregate: Aggregate<Guid>
 {

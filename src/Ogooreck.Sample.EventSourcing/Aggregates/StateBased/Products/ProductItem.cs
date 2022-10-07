@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.EventSourcing.Aggregates.Products;
+namespace Ogooreck.Sample.EventSourcing.Aggregates.StateBased.Products;
 
 public record ProductItem
 {

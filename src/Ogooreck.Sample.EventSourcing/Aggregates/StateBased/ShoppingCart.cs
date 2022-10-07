@@ -1,8 +1,8 @@
-using Ogooreck.Sample.EventSourcing.Aggregates.Core;
-using Ogooreck.Sample.EventSourcing.Aggregates.Pricing;
-using Ogooreck.Sample.EventSourcing.Aggregates.Products;
+using Ogooreck.Sample.EventSourcing.Aggregates.StateBased.Core;
+using Ogooreck.Sample.EventSourcing.Aggregates.StateBased.Pricing;
+using Ogooreck.Sample.EventSourcing.Aggregates.StateBased.Products;
 
-namespace Ogooreck.Sample.EventSourcing.Aggregates;
+namespace Ogooreck.Sample.EventSourcing.Aggregates.StateBased;
 
 public class ShoppingCart: Aggregate
 {
@@ -21,25 +21,15 @@ public class ShoppingCart: Aggregate
         return new ShoppingCart(cartId, clientId);
     }
 
-    public ShoppingCart(){}
+    private ShoppingCart(){}
 
     private ShoppingCart(
         Guid id,
         Guid clientId)
     {
-        var @event = ShoppingCartOpened.Create(
-            id,
-            clientId
-        );
 
-        Enqueue(@event);
-        Apply(@event);
-    }
-
-    public void Apply(ShoppingCartOpened @event)
-    {
-        Id = @event.CartId;
-        ClientId = @event.ClientId;
+        Id = id;
+        ClientId = clientId;
         ProductItems = new List<PricedProductItem>();
         Status = ShoppingCartStatus.Pending;
     }
@@ -51,17 +41,7 @@ public class ShoppingCart: Aggregate
         if(Status != ShoppingCartStatus.Pending)
             throw new InvalidOperationException($"Adding product for the cart in '{Status}' status is not allowed.");
 
-        var pricedProductItem = productPriceCalculator.Calculate(productItem).Single();
-
-        var @event = ProductAdded.Create(Id, pricedProductItem);
-
-        Enqueue(@event);
-        Apply(@event);
-    }
-
-    public void Apply(ProductAdded @event)
-    {
-        var newProductItem = @event.ProductItem;
+        var newProductItem = productPriceCalculator.Calculate(productItem).Single();
 
         var existingProductItem = FindProductItemMatchingWith(newProductItem);
 
@@ -91,21 +71,6 @@ public class ShoppingCart: Aggregate
         if(!existingProductItem.HasEnough(productItemToBeRemoved.Quantity))
             throw new InvalidOperationException($"Cannot remove {productItemToBeRemoved.Quantity} items of Product with id `{productItemToBeRemoved.ProductId}` as there are only ${existingProductItem.Quantity} items in card");
 
-        var @event = ProductRemoved.Create(Id, productItemToBeRemoved);
-
-        Enqueue(@event);
-        Apply(@event);
-    }
-
-    public void Apply(ProductRemoved @event)
-    {
-        var productItemToBeRemoved = @event.ProductItem;
-
-        var existingProductItem = FindProductItemMatchingWith(@event.ProductItem);
-
-        if (existingProductItem == null)
-            return;
-
         if (existingProductItem.HasTheSameQuantity(productItemToBeRemoved))
         {
             ProductItems.Remove(existingProductItem);
@@ -123,14 +88,6 @@ public class ShoppingCart: Aggregate
         if(Status != ShoppingCartStatus.Pending)
             throw new InvalidOperationException($"Confirming cart in '{Status}' status is not allowed.");
 
-        var @event = ShoppingCartConfirmed.Create(Id, DateTime.UtcNow);
-
-        Enqueue(@event);
-        Apply(@event);
-    }
-
-    public void Apply(ShoppingCartConfirmed @event)
-    {
         Status = ShoppingCartStatus.Confirmed;
     }
 
@@ -139,14 +96,6 @@ public class ShoppingCart: Aggregate
         if(Status != ShoppingCartStatus.Pending)
             throw new InvalidOperationException($"Canceling cart in '{Status}' status is not allowed.");
 
-        var @event = ShoppingCartCanceled.Create(Id, DateTime.UtcNow);
-
-        Enqueue(@event);
-        Apply(@event);
-    }
-
-    public void Apply(ShoppingCartCanceled @event)
-    {
         Status = ShoppingCartStatus.Canceled;
     }
 

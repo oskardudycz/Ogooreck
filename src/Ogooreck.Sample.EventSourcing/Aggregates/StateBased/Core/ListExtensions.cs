@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.EventSourcing.Aggregates.Core;
+namespace Ogooreck.Sample.EventSourcing.Aggregates.StateBased.Core;
 
 public static class ListExtensions
 {

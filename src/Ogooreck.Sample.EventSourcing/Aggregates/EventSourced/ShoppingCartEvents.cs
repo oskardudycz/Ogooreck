@@ -1,6 +1,6 @@
-using Ogooreck.Sample.EventSourcing.Aggregates.Products;
+using Ogooreck.Sample.EventSourcing.Aggregates.EventSourced.Products;
 
-namespace Ogooreck.Sample.EventSourcing.Aggregates;
+namespace Ogooreck.Sample.EventSourcing.Aggregates.EventSourced;
 
 public record ShoppingCartOpened(
     Guid CartId,
