@@ -40,6 +40,8 @@ Ogooreck provides a set of helpers to set up business logic tests. It's recommen
 using Ogooreck.BusinessLogic;
 ```
 
+Read more in the [Testing business logic in Event Sourcing, and beyond!](https://event-driven.io/en/testing_event_sourcing/) article.
+
 ### Decider and Command Handling tests
 
 You can use `DeciderSpecification` to run decider and command handling tests. See the example:
