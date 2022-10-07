@@ -7,30 +7,22 @@ namespace Ogooreck.BusinessLogic;
 
 using static Specification;
 
-public class DeciderSpecification<TState>: DeciderSpecification<object, object, TState>
+public class DeciderSpecification<TState>
+    : DeciderSpecification<object, object, TState>
 {
     public DeciderSpecification(Decider<object, object, TState> decider): base(decider) { }
 }
 
-public class AggregateSpecification<TEvent, TState>: DeciderSpecification<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState>
+public class AggregateSpecification<TEvent, TState>
+    : DeciderSpecification<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState>
 {
     public AggregateSpecification(Decider<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> decider): base(decider) { }
 }
 
-public class AggregateSpecification<TState>: AggregateSpecification<object, TState>
+public class AggregateSpecification<TState>
+    : AggregateSpecification<object, TState>
 {
     public AggregateSpecification(Decider<Func<TState, DecideResult<object, TState>>, object, TState> decider): base(decider) { }
-}
-
-public class
-    HandlerSpecification<TEvent, TState>: DeciderSpecification<Func<TState, TEvent[]>, TEvent, TState>
-{
-    public HandlerSpecification(Decider<Func<TState, TEvent[]>, TEvent, TState> decider): base(decider) { }
-}
-
-public class HandlerSpecification<TState>: HandlerSpecification<object, TState>
-{
-    public HandlerSpecification(Decider<Func<TState, object[]>, object, TState> decider): base(decider) { }
 }
 
 public class DeciderSpecification<TCommand, TEvent, TState>
@@ -294,13 +286,25 @@ public static class Specification
     ) =>
         given.When(_ => DecideResult<TEvent, TState>.For(when()));
 
+    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> When<TEvent, TState>(
+        this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
+        Func<TEvent[]> when
+    ) =>
+        given.When(_ => DecideResult<TEvent, TState>.For(when()));
 
-    public static HandlerSpecification<TState> For<TState>(
+    public static WhenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> When<TEvent, TState>(
+        this GivenDeciderSpecificationBuilder<Func<TState, DecideResult<TEvent, TState>>, TEvent, TState> given,
+        Func<TEvent> when
+    ) =>
+        given.When(_ => DecideResult<TEvent, TState>.For(when()));
+
+
+    public static AggregateSpecification<TState> For<TState>(
         Func<TState, object, TState> evolve,
         Func<TState>? getInitialState = null
     ) =>
         new(
-            new Decider<Func<TState, object[]>, object, TState>(
+            new Decider<Func<TState, DecideResult<object, TState>>, object, TState>(
 
                 (handler, currentState) => DecideResult<object, TState>.For(handler(currentState)),
                 evolve,

@@ -1,5 +1,4 @@
 ﻿using Ogooreck.BusinessLogic;
-using Ogooreck.Sample.EventSourcing.Aggregates.Core;
 
 namespace Ogooreck.Sample.EventSourcing.Functions;
 
@@ -27,7 +26,7 @@ public class IncidentTests
             };
         };
 
-    private readonly HandlerSpecification<Incident> Spec = Specification.For(evolve);
+    private readonly AggregateSpecification<Incident> Spec = Specification.For(evolve);
 
     [Fact]
     public void GivenNonExistingIncident_WhenOpenWithValidParams_ThenSucceeds()
@@ -67,14 +66,5 @@ public static class IncidentEventsBuilder
         var loggedBy = Guid.NewGuid();
 
         return new IncidentLogged(incidentId, customerId, contact, description, loggedBy, now);
-    }
-}
-
-public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggregate
-{
-    public static object[] Handle(Action<TAggregate> handle, TAggregate bankAccount)
-    {
-        handle(bankAccount);
-        return bankAccount.DequeueUncommittedEvents();
     }
 }
