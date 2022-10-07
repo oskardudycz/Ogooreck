@@ -14,32 +14,8 @@ public class ShoppingCartTests
 {
     private readonly Random random = new();
 
-    private static readonly Func<ShoppingCart, object, ShoppingCart> evolve =
-        (cart, @event) =>
-        {
-            switch (@event)
-            {
-                case ShoppingCartOpened opened:
-                    cart.Apply(opened);
-                    break;
-                case ProductAdded productAdded:
-                    cart.Apply(productAdded);
-                    break;
-                case ProductRemoved productRemoved:
-                    cart.Apply(productRemoved);
-                    break;
-                case ShoppingCartConfirmed confirmed:
-                    cart.Apply(confirmed);
-                    break;
-                case ShoppingCartCanceled canceled:
-                    cart.Apply(canceled);
-                    break;
-            }
-
-            return cart;
-        };
-
-    private readonly HandlerSpecification<ShoppingCart> Spec = Specification.For(Handle, evolve);
+    private readonly HandlerSpecification<ShoppingCart> Spec =
+        Specification.For<ShoppingCart>(Handle, ShoppingCart.Evolve);
 
     private class DummyProductPriceCalculator: IProductPriceCalculator
     {
@@ -100,7 +76,7 @@ public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggre
     public static DecideResult<object, TAggregate> Handle(Handler<object, TAggregate> handle, TAggregate aggregate)
     {
         var result = handle(aggregate);
-        var updatedAggregate = result.CurrentState ?? aggregate;
+        var updatedAggregate = result.NewState ?? aggregate;
         return DecideResult.For(updatedAggregate, updatedAggregate.DequeueUncommittedEvents());
     }
 }

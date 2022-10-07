@@ -19,7 +19,7 @@ public static class Decider
     ) =>
         new(
             decide,
-            (state, @event) => evolve != null ? evolve(state, @event): state,
+            (state, @event) => evolve != null ? evolve(state, @event) : state,
             getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
         );
 
@@ -29,7 +29,7 @@ public static class Decider
         Func<TState>? getInitialState = null
     ) =>
         For<TCommand, TEvent, TState>(
-            (command, currentState) => new [] {decide(command, currentState)},
+            (command, currentState) => new[] { decide(command, currentState) },
             evolve,
             getInitialState
         );
@@ -48,7 +48,7 @@ public static class Decider
 
 public record DecideResult<TEvent, TState>(
     TEvent[] NewEvents,
-    TState? CurrentState = default
+    TState? NewState = default
 );
 
 public static class DecideResult

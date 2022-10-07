@@ -36,6 +36,30 @@ public class ShoppingCart: Aggregate
         Apply(@event);
     }
 
+    public static ShoppingCart Evolve(ShoppingCart cart, object @event)
+    {
+        switch (@event)
+        {
+            case ShoppingCartOpened opened:
+                cart.Apply(opened);
+                break;
+            case ProductAdded productAdded:
+                cart.Apply(productAdded);
+                break;
+            case ProductRemoved productRemoved:
+                cart.Apply(productRemoved);
+                break;
+            case ShoppingCartConfirmed confirmed:
+                cart.Apply(confirmed);
+                break;
+            case ShoppingCartCanceled canceled:
+                cart.Apply(canceled);
+                break;
+        }
+
+        return cart;
+    }
+
     public void Apply(ShoppingCartOpened @event)
     {
         Id = @event.CartId;

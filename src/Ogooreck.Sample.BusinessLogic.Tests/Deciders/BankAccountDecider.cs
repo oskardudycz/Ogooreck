@@ -23,7 +23,6 @@ public record CloseBankAccount(
 
 public static class BankAccountDecider
 {
-
     public static object Handle(
         Func<DateTimeOffset> now,
         object command,

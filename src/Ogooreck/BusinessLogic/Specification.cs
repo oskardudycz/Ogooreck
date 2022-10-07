@@ -50,6 +50,31 @@ public static class Specification
     ) =>
         new(Decider.For(decide, evolve, getInitialState));
 
+    public static HandlerSpecification<TEvent, TState> For<TEvent, TState>(
+        Func<Handler<TEvent, TState>, TState, DecideResult<TEvent, TState>> decide,
+        Func<TState, TEvent, TState> evolve,
+        Func<TState>? getInitialState = null
+    ) =>
+        new(
+            Decider.For(
+                decide,
+                evolve,
+                getInitialState
+            )
+        );
+
+    public static HandlerSpecification<TEvent, TState> For<TEvent, TState>(
+        Func<TState, TEvent, TState>? evolve = null,
+        Func<TState>? getInitialState = null
+    ) =>
+        new(
+            Decider.For<Handler<TEvent, TState>, TEvent, TState>(
+                decide: (handler, currentState) => handler(currentState),
+                evolve,
+                getInitialState
+            )
+        );
+
     public static HandlerSpecification<TState> For<TState>(
         Func<Handler<object, TState>, TState, DecideResult<object, TState>> decide,
         Func<TState, object, TState> evolve,
