@@ -1,6 +1,6 @@
 ﻿using Ogooreck.BusinessLogic;
 
-namespace Ogooreck.Sample.BusinessLogic.Tests.Functions;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Functions.EventSourced;
 
 using static IncidentEventsBuilder;
 using static IncidentService;

@@ -47,6 +47,7 @@ public static class HandlerSpecificationExtensions
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
         );
+
     public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
         When<TEvent, TState>(
             this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,
@@ -78,6 +79,13 @@ public static class HandlerSpecificationExtensions
             Func<TState> when
         ) =>
         given.When(_ => DecideResult.For<TEvent, TState>(when()));
+
+    public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
+        When<TEvent, TState>(
+            this GivenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState> given,
+            Func<TState, TState> when
+        ) =>
+        given.When(state => DecideResult.For<TEvent, TState>(when(state)));
 
     public static WhenDeciderSpecificationBuilder<Handler<TEvent, TState>, TEvent, TState>
         When<TEvent, TState>(

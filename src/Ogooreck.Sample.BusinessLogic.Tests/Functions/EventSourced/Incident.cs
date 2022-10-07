@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.BusinessLogic.Tests.Functions;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Functions.EventSourced;
 
 public record IncidentLogged(
     Guid IncidentId,

@@ -11,6 +11,19 @@ public static class Specification
         new(decider);
 
     public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
+        Func<TCommand, TState, DecideResult<TEvent, TState>> decide,
+        Func<TState, TEvent, TState> evolve,
+        Func<TState>? getInitialState = null
+    ) where TState : notnull =>
+        For(
+            new Decider<TCommand, TEvent, TState>(
+                decide,
+                evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
+    public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
         Func<TCommand, TState, TEvent[]> decide,
         Func<TState, TEvent, TState> evolve,
         Func<TState>? getInitialState = null
@@ -41,28 +54,31 @@ public static class Specification
             )
         );
 
-    public static DeciderSpecification<Action<TState>, TEvent, TState> For<TEvent, TState>(
-        Func<Action<TState>, TState, TEvent> decide,
-        Func<TState, TEvent, TState> evolve,
-        Func<TState>? getInitialState
-    ) =>
+    public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
+        Func<TCommand, TState, TEvent[]> decide,
+        Func<TState>? getInitialState = null
+    ) where TState : notnull =>
         For(
-            new Decider<Action<TState>, TEvent, TState>(
-                (command, currentState) => DecideResult.For<TEvent, TState>(decide(command, currentState)),
-                evolve,
+            new Decider<TCommand, TEvent, TState>(
+                (command, currentState) =>
+                {
+                    var newEvents = decide(command, currentState);
+
+                    return new DecideResult<TEvent, TState>(newEvents);
+                },
+                (state, _) => state,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
         );
 
-    public static DeciderSpecification<Action<TState>, TEvent, TState> For<TEvent, TState>(
-        Func<Action<TState>, TState, TEvent[]> decide,
-        Func<TState, TEvent, TState> evolve,
+    public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
+        Func<TCommand, TState, TEvent> decide,
         Func<TState>? getInitialState
     ) =>
         For(
-            new Decider<Action<TState>, TEvent, TState>(
+            new Decider<TCommand, TEvent, TState>(
                 (command, currentState) => DecideResult.For<TEvent, TState>(decide(command, currentState)),
-                evolve,
+                (state, _) => state,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
         );
@@ -76,6 +92,43 @@ public static class Specification
             new Decider<object, object, TState>(
                 (command, currentState) => DecideResult.For<TState>(decide(command, currentState)),
                 evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
+    public static DeciderSpecification<TState> For<TState>(
+        Func<object, TState, object> decide,
+        Func<TState>? getInitialState = null
+    ) =>
+        new(
+            new Decider<object, object, TState>(
+                (command, currentState) => DecideResult.For<TState>(decide(command, currentState)),
+                (state, _) => state,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
+    public static DeciderSpecification<TState> For<TState>(
+        Func<object, TState, DecideResult<object, TState>> decide,
+        Func<TState, object, TState> evolve,
+        Func<TState>? getInitialState = null
+    ) =>
+        new(
+            new Decider<object, object, TState>(
+                (command, currentState) => decide(command, currentState),
+                evolve,
+                getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
+            )
+        );
+
+    public static DeciderSpecification<TState> For<TState>(
+        Func<object, TState, DecideResult<object, TState>> decide,
+        Func<TState>? getInitialState = null
+    ) =>
+        new(
+            new Decider<object, object, TState>(
+                (command, currentState) => decide(command, currentState),
+                (state, _) => state,
                 getInitialState ?? ObjectFactory<TState>.GetDefaultOrUninitialized
             )
         );

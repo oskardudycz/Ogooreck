@@ -1,4 +1,4 @@
-namespace Ogooreck.Sample.BusinessLogic.Tests.Functions;
+namespace Ogooreck.Sample.BusinessLogic.Tests.Functions.StateBased;
 
 public record LogIncident(
     Guid IncidentId,
@@ -53,44 +53,44 @@ public record CloseIncident(
 
 internal static class IncidentService
 {
-    public static IncidentLogged Handle(Func<DateTimeOffset> now, LogIncident command)
+    public static Incident Handle(Func<DateTimeOffset> now, LogIncident command)
     {
         var (incidentId, customerId, contact, description, loggedBy) = command;
 
-        return new IncidentLogged(incidentId, customerId, contact, description, loggedBy, now());
+        return new Incident(incidentId, customerId,  contact, loggedBy, now(), description);
     }
 
-    public static IncidentCategorised Handle(Func<DateTimeOffset> now, Incident current, CategoriseIncident command)
+    public static Incident Handle(Func<DateTimeOffset> now, Incident current, CategoriseIncident command)
     {
         if (current.Status == IncidentStatus.Closed)
             throw new InvalidOperationException("Incident is already closed");
 
-        var (incidentId, incidentCategory, categorisedBy) = command;
+        var (_, category, _) = command;
 
-        return new IncidentCategorised(incidentId, incidentCategory, categorisedBy, now());
+        return current with { Category = category };
     }
 
-    public static IncidentPrioritised Handle(Func<DateTimeOffset> now, Incident current, PrioritiseIncident command)
+    public static Incident Handle(Func<DateTimeOffset> now, Incident current, PrioritiseIncident command)
     {
         if (current.Status == IncidentStatus.Closed)
             throw new InvalidOperationException("Incident is already closed");
 
-        var (incidentId, incidentPriority, prioritisedBy) = command;
+        var (_, priority, _) = command;
 
-        return new IncidentPrioritised(incidentId, incidentPriority, prioritisedBy, now());
+        return current with { Priority = priority };
     }
 
-    public static AgentAssignedToIncident Handle(Func<DateTimeOffset> now, Incident current, AssignAgentToIncident command)
+    public static Incident Handle(Func<DateTimeOffset> now, Incident current, AssignAgentToIncident command)
     {
         if (current.Status == IncidentStatus.Closed)
             throw new InvalidOperationException("Incident is already closed");
 
-        var (incidentId, agentId) = command;
+        var (_, agentId) = command;
 
-        return new AgentAssignedToIncident(incidentId, agentId, now());
+        return current with { AgentId = agentId };
     }
 
-    public static AgentRespondedToIncident Handle(
+    public static Incident Handle(
         Func<DateTimeOffset> now,
         Incident current,
         RecordAgentResponseToIncident command
@@ -99,12 +99,15 @@ internal static class IncidentService
         if (current.Status == IncidentStatus.Closed)
             throw new InvalidOperationException("Incident is already closed");
 
-        var (incidentId, response) = command;
+        var (_, response) = command;
 
-        return new AgentRespondedToIncident(incidentId, response, now());
+        return current with
+        {
+            Responses = (current.Responses ?? Array.Empty<IncidentResponse>()).Union(new[] { response }).ToArray()
+        };
     }
 
-    public static CustomerRespondedToIncident Handle(
+    public static Incident Handle(
         Func<DateTimeOffset> now,
         Incident current,
         RecordCustomerResponseToIncident command
@@ -113,12 +116,15 @@ internal static class IncidentService
         if (current.Status == IncidentStatus.Closed)
             throw new InvalidOperationException("Incident is already closed");
 
-        var (incidentId, response) = command;
+        var (_, response) = command;
 
-        return new CustomerRespondedToIncident(incidentId, response, now());
+        return current with
+        {
+            Responses = (current.Responses ?? Array.Empty<IncidentResponse>()).Union(new[] { response }).ToArray()
+        };
     }
 
-    public static IncidentResolved Handle(
+    public static Incident Handle(
         Func<DateTimeOffset> now,
         Incident current,
         ResolveIncident command
@@ -130,12 +136,16 @@ internal static class IncidentService
         if (current.HasOutstandingResponseToCustomer)
             throw new InvalidOperationException("Cannot resolve incident that has outstanding responses to customer");
 
-        var (incidentId, resolution, resolvedBy) = command;
+        var (_, resolution, resolvedBy) = command;
 
-        return new IncidentResolved(incidentId, resolution, resolvedBy, now());
+        return current with
+        {
+            Status = IncidentStatus.ResolutionAcknowledgedByCustomer,
+            Resolved = new Resolution(resolvedBy, now(), resolution)
+        };
     }
 
-    public static ResolutionAcknowledgedByCustomer Handle(
+    public static Incident Handle(
         Func<DateTimeOffset> now,
         Incident current,
         AcknowledgeResolution command
@@ -144,12 +154,16 @@ internal static class IncidentService
         if (current.Status is not IncidentStatus.Resolved)
             throw new InvalidOperationException("Only resolved incident can be acknowledged");
 
-        var (incidentId, acknowledgedBy) = command;
+        var (_, acknowledgedBy) = command;
 
-        return new ResolutionAcknowledgedByCustomer(incidentId, acknowledgedBy, now());
+        return current with
+        {
+            Status = IncidentStatus.ResolutionAcknowledgedByCustomer,
+            Acknowledged = new Acknowledgement(acknowledgedBy, now())
+        };
     }
 
-    public static IncidentClosed Handle(
+    public static Incident Handle(
         Func<DateTimeOffset> now,
         Incident current,
         CloseIncident command
@@ -161,8 +175,8 @@ internal static class IncidentService
         if (current.HasOutstandingResponseToCustomer)
             throw new InvalidOperationException("Cannot close incident that has outstanding responses to customer");
 
-        var (incidentId, acknowledgedBy) = command;
+        var (_, closedBy) = command;
 
-        return new IncidentClosed(incidentId, acknowledgedBy, now());
+        return current with { Status = IncidentStatus.Closed, Closed = new Closure(closedBy, now()) };
     }
 }
