@@ -1,40 +1,33 @@
-using System.Runtime.CompilerServices;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Runtime.Serialization;
+
+#pragma warning disable CS1591
+
 namespace Ogooreck.Factories;
 
-/// <summary>
-/// Wraps objects creation
-/// </summary>
-/// <typeparam name="T"></typeparam>
 public static class ObjectFactory<T>
 {
-    /// <summary>
-    /// Creates empty unitialised instance of object T
-    /// </summary>
-    /// <returns></returns>
-    public static T GetUnitialized() =>
-        (T)RuntimeHelpers.GetUninitializedObject(typeof(T));
+    public static readonly Func<T> GetDefaultOrUninitialized = Creator();
 
-    /// <summary>
-    /// Creates empty unitialised instance of object T
-    /// </summary>
-    /// <returns></returns>
-    public static T? GetDefault()
+    private static Func<T> Creator()
     {
-        try
-        {
-            return (T?)Activator.CreateInstance(typeof(T), true);
-        }
-        catch (MissingMethodException? e)
-        {
-            Console.WriteLine(e);
-            return default;
-        }
-    }
+        var t = typeof(T);
+        if (t == typeof(string))
+            return Expression.Lambda<Func<T>>(Expression.Constant(string.Empty)).Compile();
 
-    /// <summary>
-    /// Creates empty unitialised instance of object T
-    /// </summary>
-    /// <returns></returns>
-    public static T GetDefaultOrUninitialized()
-        => GetDefault() ?? GetUnitialized();
+        if (t.HasDefaultConstructor())
+            return Expression.Lambda<Func<T>>(Expression.New(t)).Compile();
+
+        return () => (T)FormatterServices.GetUninitializedObject(t);
+    }
+}
+
+public static class ObjectFactory
+{
+    public static bool HasDefaultConstructor(this Type t)
+    {
+        return t.IsValueType || t.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null, Type.EmptyTypes, null) != null;
+    }
 }
