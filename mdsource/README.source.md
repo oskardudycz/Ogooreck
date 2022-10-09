@@ -18,11 +18,10 @@ Main assumptions:
 
 Current available for API testing.
 
-TODO:
-- CQRS tests,
-- Aggregate Tests,
-- Event Sourcing tests,
-- Others.
+
+Current available for testing:
+- [Business Logic](#business-logic-testing),
+- [API](#api-testing).
 
 Check also [introduction post on my blog](https://event-driven.io/en/ogooreck_sneaky_bdd_testing_framework/).
 
@@ -43,6 +42,8 @@ Ogooreck provides a set of helpers to set up business logic tests. It's recommen
 ```csharp
 using Ogooreck.BusinessLogic;
 ```
+
+Read more in the [Testing business logic in Event Sourcing, and beyond!](https://event-driven.io/en/testing_event_sourcing/) article.
 
 ### Decider and Command Handling tests
 
