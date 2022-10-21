@@ -37,6 +37,7 @@ let recordDeposit now (command: RecordDeposit, bankAccount) =
       CashierId = command.CashierId
       RecordedAt = now ()
       Version = bankAccount.Version + 1L }
+    |> DepositRecorded
 
 let withdrawCashFromATM now (command, bankAccount) =
     if (bankAccount.Status = BankAccountStatus.Closed) then
@@ -50,6 +51,7 @@ let withdrawCashFromATM now (command, bankAccount) =
       ATMId = command.AtmId
       RecordedAt = now ()
       Version = bankAccount.Version + 1L }
+    |> CashWithdrawnFromATM
 
 let closeBankAccount now (command, bankAccount) =
     if (bankAccount.Status = BankAccountStatus.Closed) then
@@ -59,16 +61,11 @@ let closeBankAccount now (command, bankAccount) =
       Reason = command.Reason
       ClosedAt = now ()
       Version = bankAccount.Version + 1L }
+    |> BankAccountClosed
 
 let decide now command bankAccount =
     match command with
     | OpenBankAccount c -> openBankAccount now c |> BankAccountOpened
-    | RecordDeposit c ->
-        recordDeposit now (c, bankAccount)
-        |> DepositRecorded
-    | WithdrawnCashFromATM c ->
-        withdrawCashFromATM now (c, bankAccount)
-        |> CashWithdrawnFromATM
-    | CloseBankAccount c ->
-        closeBankAccount now (c, bankAccount)
-        |> BankAccountClosed
+    | RecordDeposit c -> recordDeposit now (c, bankAccount)
+    | WithdrawnCashFromATM c -> withdrawCashFromATM now (c, bankAccount)
+    | CloseBankAccount c -> closeBankAccount now (c, bankAccount)
