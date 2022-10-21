@@ -38,6 +38,7 @@ let BankAccountClosedWith =
           Version = version }
         |> Event.BankAccountClosed
 
+
 [<Fact>]
 let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened`` () =
     let bankAccountId = Guid.NewGuid()
@@ -48,8 +49,10 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
     let clientId = Guid.NewGuid()
     let currencyISOCode = "USD"
 
+    let notExistingAccount = Array.empty<_>
+
     spec
-        .Given()
+        .Given(notExistingAccount)
         .When(
             { BankAccountId = bankAccountId
               AccountNumber = accountNumber
