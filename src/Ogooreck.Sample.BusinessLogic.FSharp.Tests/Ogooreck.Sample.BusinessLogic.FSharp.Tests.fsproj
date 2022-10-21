@@ -8,9 +8,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Include="Tests.fs" />
         <Compile Include="Deciders\BankAccount.fs" />
         <Compile Include="Deciders\BankAccountDecider.fs" />
+        <Compile Include="Deciders\BankAccountTests.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
@@ -25,6 +25,10 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Ogooreck\Ogooreck.csproj" />
     </ItemGroup>
 
 </Project>

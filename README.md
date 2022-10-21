@@ -16,6 +16,9 @@ Main assumptions:
 - testing frameworks and assert library agnostic,
 - keep things simple, but allow compositions and extension.
 
+Current available for API testing.
+
+
 Current available for testing:
 - [Business Logic](#business-logic-testing),
 - [API](#api-testing).

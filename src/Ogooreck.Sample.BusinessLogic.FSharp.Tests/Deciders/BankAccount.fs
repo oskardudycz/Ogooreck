@@ -3,34 +3,34 @@
 open System
 
 type BankAccountOpened =
-    {| BankAccountId: Guid
-       AccountNumber: string
-       ClientId: Guid
-       CurrencyISOCode: string
-       CreatedAt: DateTimeOffset
-       Version: int64 |}
+    { BankAccountId: Guid
+      AccountNumber: string
+      ClientId: Guid
+      CurrencyISOCode: string
+      CreatedAt: DateTimeOffset
+      Version: int64 }
 
 type DepositRecorded =
-    {| BankAccountId: Guid
-       Amount: decimal
-       CashierId: Guid
-       RecordedAt: DateTimeOffset
-       Version: int64 |}
+    { BankAccountId: Guid
+      Amount: decimal
+      CashierId: Guid
+      RecordedAt: DateTimeOffset
+      Version: int64 }
 
 type CashWithdrawnFromATM =
-    {| BankAccountId: Guid
-       Amount: decimal
-       ATMId: Guid
-       RecordedAt: DateTimeOffset
-       Version: int64 |}
+    { BankAccountId: Guid
+      Amount: decimal
+      ATMId: Guid
+      RecordedAt: DateTimeOffset
+      Version: int64 }
 
 type BankAccountClosed =
-    {| BankAccountId: Guid
-       Reason: string
-       ClosedAt: DateTimeOffset
-       Version: int64 |}
+    { BankAccountId: Guid
+      Reason: string
+      ClosedAt: DateTimeOffset
+      Version: int64 }
 
-type BankAccountEvent =
+type Event =
     | BankAccountOpened of BankAccountOpened
     | DepositRecorded of DepositRecorded
     | CashWithdrawnFromATM of CashWithdrawnFromATM
@@ -68,7 +68,7 @@ type BankAccount =
             Version = depositRecorded.Version }
 
 
-let evolve (state: BankAccount, event: BankAccountEvent) =
+let evolve (state: BankAccount) (event: Event) =
     match event with
     | BankAccountOpened e -> BankAccount.Create(e)
     | DepositRecorded e -> state.Apply(e)

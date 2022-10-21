@@ -3,6 +3,7 @@
 
 public static class Specification
 {
+
     public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
         Decider<TCommand, TEvent, TState> decider
     ) =>
