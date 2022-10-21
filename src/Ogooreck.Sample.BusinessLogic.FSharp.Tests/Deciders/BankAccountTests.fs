@@ -38,7 +38,6 @@ let BankAccountClosedWith =
           Version = version }
         |> Event.BankAccountClosed
 
-
 [<Fact>]
 let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened`` () =
     let bankAccountId = Guid.NewGuid()

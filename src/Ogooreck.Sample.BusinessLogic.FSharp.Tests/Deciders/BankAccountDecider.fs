@@ -11,13 +11,13 @@ type OpenBankAccount =
       CurrencyISOCode: string }
 
 type RecordDeposit = { Amount: decimal; CashierId: Guid }
-type WithdrawnCashFromATM = { Amount: decimal; AtmId: Guid }
+type WithdrawCashFromATM = { Amount: decimal; AtmId: Guid }
 type CloseBankAccount = { Reason: string }
 
 type Command =
     | OpenBankAccount of OpenBankAccount
     | RecordDeposit of RecordDeposit
-    | WithdrawnCashFromATM of WithdrawnCashFromATM
+    | WithdrawnCashFromATM of WithdrawCashFromATM
     | CloseBankAccount of CloseBankAccount
 
 let openBankAccount now command =
