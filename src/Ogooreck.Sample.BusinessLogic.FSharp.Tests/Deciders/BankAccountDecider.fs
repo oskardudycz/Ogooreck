@@ -2,7 +2,6 @@
 
 open System
 open BankAccount
-open Deciders.BankAccount
 
 type OpenBankAccount =
     { BankAccountId: Guid
@@ -27,6 +26,7 @@ let openBankAccount now command =
       CurrencyISOCode = command.CurrencyISOCode
       CreatedAt = now ()
       Version = 1 }
+    |> BankAccountOpened
 
 let recordDeposit now (command: RecordDeposit, bankAccount) =
     if (bankAccount.Status = BankAccountStatus.Closed) then
@@ -65,7 +65,7 @@ let closeBankAccount now (command, bankAccount) =
 
 let decide now command bankAccount =
     match command with
-    | OpenBankAccount c -> openBankAccount now c |> BankAccountOpened
+    | OpenBankAccount c -> openBankAccount now c
     | RecordDeposit c -> recordDeposit now (c, bankAccount)
     | WithdrawnCashFromATM c -> withdrawCashFromATM now (c, bankAccount)
     | CloseBankAccount c -> closeBankAccount now (c, bankAccount)
