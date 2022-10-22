@@ -16,7 +16,7 @@ type CloseBankAccount = { Reason: string }
 type Command =
     | OpenBankAccount of OpenBankAccount
     | RecordDeposit of RecordDeposit
-    | WithdrawnCashFromATM of WithdrawCashFromATM
+    | WithdrawCashFromATM of WithdrawCashFromATM
     | CloseBankAccount of CloseBankAccount
 
 let openBankAccount now command =
@@ -67,5 +67,5 @@ let decide now command bankAccount =
     match command with
     | OpenBankAccount c -> openBankAccount now c
     | RecordDeposit c -> recordDeposit now (c, bankAccount)
-    | WithdrawnCashFromATM c -> withdrawCashFromATM now (c, bankAccount)
+    | WithdrawCashFromATM c -> withdrawCashFromATM now (c, bankAccount)
     | CloseBankAccount c -> closeBankAccount now (c, bankAccount)
