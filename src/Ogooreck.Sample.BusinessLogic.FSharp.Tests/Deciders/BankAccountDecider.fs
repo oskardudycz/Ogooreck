@@ -30,6 +30,7 @@ let openBankAccount now command =
 
 let recordDeposit now (command: RecordDeposit) (bankAccount: BankAccount) =
     match bankAccount with
+    | NotInitialised _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is closed!"
     | Open openBankAccount ->
         { BankAccountId = openBankAccount.Id
@@ -41,6 +42,7 @@ let recordDeposit now (command: RecordDeposit) (bankAccount: BankAccount) =
 
 let withdrawCashFromATM now (command: WithdrawCashFromATM) (bankAccount: BankAccount) =
     match bankAccount with
+    | NotInitialised _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is closed!"
     | Open openBankAccount ->
         if (openBankAccount.Balance < command.Amount) then
@@ -55,6 +57,7 @@ let withdrawCashFromATM now (command: WithdrawCashFromATM) (bankAccount: BankAcc
 
 let closeBankAccount now (command: CloseBankAccount) (bankAccount: BankAccount) =
     match bankAccount with
+    | NotInitialised _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is already closed!"
     | Open openBankAccount ->
         { BankAccountId = openBankAccount.Id

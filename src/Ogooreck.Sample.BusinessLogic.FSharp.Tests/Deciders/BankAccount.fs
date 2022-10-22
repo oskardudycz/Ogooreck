@@ -37,6 +37,7 @@ type Event =
     | BankAccountClosed of BankAccountClosed
 
 type BankAccount =
+    | NotInitialised
     | Open of
         {| Id: Guid
            Balance: decimal
@@ -56,6 +57,7 @@ type BankAccount =
                 Balance = openAccount.Balance + depositRecorded.Amount
                 Version = depositRecorded.Version |}
             |> BankAccount.Open
+        | NotInitialised _ -> this
         | Closed _ -> this
 
     member this.Apply(depositRecorded: CashWithdrawnFromATM) =
@@ -65,6 +67,7 @@ type BankAccount =
                 Balance = openAccount.Balance - depositRecorded.Amount
                 Version = depositRecorded.Version |}
             |> BankAccount.Open
+        | NotInitialised _ -> this
         | Closed _ -> this
 
     member this.Apply(bankAccountClosed: BankAccountClosed) =
@@ -73,6 +76,7 @@ type BankAccount =
             {| Id = openAccount.Id
                Version = bankAccountClosed.Version |}
             |> BankAccount.Closed
+        | NotInitialised _ -> this
         | Closed _ -> this
 
 
