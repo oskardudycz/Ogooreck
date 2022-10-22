@@ -1,5 +1,6 @@
 ﻿module Deciders.BankAccountDecider
 
+open System
 open BankAccount
 open BankAccountPrimitives
 
@@ -7,11 +8,12 @@ type OpenBankAccount =
     { BankAccountId: AccountId
       AccountNumber: AccountNumber
       ClientId: ClientId
-      CurrencyISOCode: CurrencyCode }
+      CurrencyISOCode: CurrencyCode
+      Now: DateTimeOffset }
 
-type RecordDeposit = { Amount: decimal; CashierId: CashierId }
-type WithdrawCashFromATM = { Amount: decimal; AtmId: AtmId }
-type CloseBankAccount = { Reason: string }
+type RecordDeposit = { Amount: decimal; CashierId: CashierId; Now: DateTimeOffset }
+type WithdrawCashFromATM = { Amount: decimal; AtmId: AtmId; Now: DateTimeOffset }
+type CloseBankAccount = { Reason: string; Now: DateTimeOffset }
 
 type Command =
     | OpenBankAccount of OpenBankAccount
@@ -19,7 +21,7 @@ type Command =
     | WithdrawCashFromATM of WithdrawCashFromATM
     | CloseBankAccount of CloseBankAccount
 
-let openBankAccount now (command: OpenBankAccount) (bankAccount: BankAccount) =
+let openBankAccount (command: OpenBankAccount) (bankAccount: BankAccount) =
     match bankAccount with
     | Open _ -> invalidOp "Account is already opened!"
     | Closed _ -> invalidOp "Account is already closed!"
@@ -29,10 +31,10 @@ let openBankAccount now (command: OpenBankAccount) (bankAccount: BankAccount) =
               AccountNumber = command.AccountNumber
               ClientId = command.ClientId
               CurrencyISOCode = command.CurrencyISOCode
-              CreatedAt = now ()
+              CreatedAt = command.Now
               Version = 1 }
 
-let recordDeposit now (command: RecordDeposit) (bankAccount: BankAccount) =
+let recordDeposit (command: RecordDeposit) (bankAccount: BankAccount) =
     match bankAccount with
     | NotInitialised _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is closed!"
@@ -41,10 +43,10 @@ let recordDeposit now (command: RecordDeposit) (bankAccount: BankAccount) =
             { BankAccountId = openBankAccount.Id
               Amount = command.Amount
               CashierId = command.CashierId
-              RecordedAt = now ()
+              RecordedAt  = command.Now
               Version = openBankAccount.Version + 1L }
 
-let withdrawCashFromATM now (command: WithdrawCashFromATM) (bankAccount: BankAccount) =
+let withdrawCashFromATM (command: WithdrawCashFromATM) (bankAccount: BankAccount) =
     match bankAccount with
     | NotInitialised _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is closed!"
@@ -56,10 +58,10 @@ let withdrawCashFromATM now (command: WithdrawCashFromATM) (bankAccount: BankAcc
             { BankAccountId = openBankAccount.Id
               Amount = command.Amount
               ATMId = command.AtmId
-              RecordedAt = now ()
+              RecordedAt = command.Now
               Version = openBankAccount.Version + 1L }
 
-let closeBankAccount now (command: CloseBankAccount) (bankAccount: BankAccount) =
+let closeBankAccount (command: CloseBankAccount) (bankAccount: BankAccount) =
     match bankAccount with
     | NotInitialised _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is already closed!"
@@ -67,12 +69,12 @@ let closeBankAccount now (command: CloseBankAccount) (bankAccount: BankAccount) 
         BankAccountClosed
             { BankAccountId = openBankAccount.Id
               Reason = command.Reason
-              ClosedAt = now ()
+              ClosedAt = command.Now
               Version = openBankAccount.Version + 1L }
 
-let decide now command bankAccount =
+let decide command bankAccount =
     match command with
-    | OpenBankAccount c -> openBankAccount now c bankAccount
-    | RecordDeposit c -> recordDeposit now c bankAccount
-    | WithdrawCashFromATM c -> withdrawCashFromATM now c bankAccount
-    | CloseBankAccount c -> closeBankAccount now c bankAccount
+    | OpenBankAccount c -> openBankAccount c bankAccount
+    | RecordDeposit c -> recordDeposit c bankAccount
+    | WithdrawCashFromATM c -> withdrawCashFromATM c bankAccount
+    | CloseBankAccount c -> closeBankAccount c bankAccount
