@@ -19,26 +19,30 @@ type Command =
     | WithdrawCashFromATM of WithdrawCashFromATM
     | CloseBankAccount of CloseBankAccount
 
-let openBankAccount now command =
-    { BankAccountId = command.BankAccountId
-      AccountNumber = command.AccountNumber
-      ClientId = command.ClientId
-      CurrencyISOCode = command.CurrencyISOCode
-      CreatedAt = now ()
-      Version = 1 }
-    |> BankAccountOpened
+let openBankAccount now (command: OpenBankAccount) (bankAccount: BankAccount) =
+    match bankAccount with
+    | Open _ -> invalidOp "Account is already opened!"
+    | Closed _ -> invalidOp "Account is already closed!"
+    | NotInitialised _ ->
+        BankAccountOpened
+            { BankAccountId = command.BankAccountId
+              AccountNumber = command.AccountNumber
+              ClientId = command.ClientId
+              CurrencyISOCode = command.CurrencyISOCode
+              CreatedAt = now ()
+              Version = 1 }
 
 let recordDeposit now (command: RecordDeposit) (bankAccount: BankAccount) =
     match bankAccount with
     | NotInitialised _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is closed!"
     | Open openBankAccount ->
-        { BankAccountId = openBankAccount.Id
-          Amount = command.Amount
-          CashierId = command.CashierId
-          RecordedAt = now ()
-          Version = openBankAccount.Version + 1L }
-        |> DepositRecorded
+        DepositRecorded
+            { BankAccountId = openBankAccount.Id
+              Amount = command.Amount
+              CashierId = command.CashierId
+              RecordedAt = now ()
+              Version = openBankAccount.Version + 1L }
 
 let withdrawCashFromATM now (command: WithdrawCashFromATM) (bankAccount: BankAccount) =
     match bankAccount with
@@ -48,27 +52,27 @@ let withdrawCashFromATM now (command: WithdrawCashFromATM) (bankAccount: BankAcc
         if (openBankAccount.Balance < command.Amount) then
             invalidOp "Not enough money!"
 
-        { BankAccountId = openBankAccount.Id
-          Amount = command.Amount
-          ATMId = command.AtmId
-          RecordedAt = now ()
-          Version = openBankAccount.Version + 1L }
-        |> CashWithdrawnFromATM
+        CashWithdrawnFromATM
+            { BankAccountId = openBankAccount.Id
+              Amount = command.Amount
+              ATMId = command.AtmId
+              RecordedAt = now ()
+              Version = openBankAccount.Version + 1L }
 
 let closeBankAccount now (command: CloseBankAccount) (bankAccount: BankAccount) =
     match bankAccount with
     | NotInitialised _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is already closed!"
     | Open openBankAccount ->
-        { BankAccountId = openBankAccount.Id
-          Reason = command.Reason
-          ClosedAt = now ()
-          Version = openBankAccount.Version + 1L }
-        |> BankAccountClosed
+        BankAccountClosed
+            { BankAccountId = openBankAccount.Id
+              Reason = command.Reason
+              ClosedAt = now ()
+              Version = openBankAccount.Version + 1L }
 
 let decide now command bankAccount =
     match command with
-    | OpenBankAccount c -> openBankAccount now c
+    | OpenBankAccount c -> openBankAccount now c bankAccount
     | RecordDeposit c -> recordDeposit now c bankAccount
     | WithdrawCashFromATM c -> withdrawCashFromATM now c bankAccount
     | CloseBankAccount c -> closeBankAccount now c bankAccount

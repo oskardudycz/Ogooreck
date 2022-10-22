@@ -12,36 +12,39 @@ let now = DateTimeOffset.UtcNow
 
 let getNow = fun () -> now
 
-let spec = Specification.For(decide getNow, evolve, fun () -> NotInitialised )
+let spec =
+    Specification.For(decide getNow, evolve, (fun () -> NotInitialised))
 
 let BankAccountOpenedWith =
     fun bankAccountId now version ->
-        let accountNumber = Guid.NewGuid().ToString()
+        let accountNumber =
+            Guid.NewGuid().ToString()
 
         let clientId = Guid.NewGuid()
         let currencyISOCode = "USD"
 
-        { BankAccountId = bankAccountId
-          AccountNumber = accountNumber
-          ClientId = clientId
-          CurrencyISOCode = currencyISOCode
-          CreatedAt = now
-          Version = version }
-        |> Event.BankAccountOpened
+        BankAccountOpened
+            { BankAccountId = bankAccountId
+              AccountNumber = accountNumber
+              ClientId = clientId
+              CurrencyISOCode = currencyISOCode
+              CreatedAt = now
+              Version = version }
 
 let BankAccountClosedWith =
     fun bankAccountId now version ->
-        { BankAccountId = bankAccountId
-          Reason = Guid.NewGuid().ToString()
-          ClosedAt = now
-          Version = version }
-        |> Event.BankAccountClosed
+        BankAccountClosed
+            { BankAccountId = bankAccountId
+              Reason = Guid.NewGuid().ToString()
+              ClosedAt = now
+              Version = version }
 
 [<Fact>]
 let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened`` () =
     let bankAccountId = Guid.NewGuid()
 
-    let accountNumber = Guid.NewGuid().ToString()
+    let accountNumber =
+        Guid.NewGuid().ToString()
 
     let clientId = Guid.NewGuid()
     let currencyISOCode = "USD"
@@ -51,20 +54,20 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
     spec
         .Given(notExistingAccount)
         .When(
-            { BankAccountId = bankAccountId
-              AccountNumber = accountNumber
-              ClientId = clientId
-              CurrencyISOCode = currencyISOCode }
-            |> Command.OpenBankAccount
+            OpenBankAccount
+                { BankAccountId = bankAccountId
+                  AccountNumber = accountNumber
+                  ClientId = clientId
+                  CurrencyISOCode = currencyISOCode }
         )
         .Then(
-            { BankAccountId = bankAccountId
-              AccountNumber = accountNumber
-              ClientId = clientId
-              CurrencyISOCode = currencyISOCode
-              CreatedAt = now
-              Version = 1 }
-            |> Event.BankAccountOpened
+            BankAccountOpened
+                { BankAccountId = bankAccountId
+                  AccountNumber = accountNumber
+                  ClientId = clientId
+                  CurrencyISOCode = currencyISOCode
+                  CreatedAt = now
+                  Version = 1 }
         )
 
 [<Fact>]
@@ -76,17 +79,17 @@ let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit
     spec
         .Given(BankAccountOpenedWith bankAccountId now 1)
         .When(
-            { Amount = amount
-              CashierId = cashierId }
-            |> Command.RecordDeposit
+            RecordDeposit
+                { Amount = amount
+                  CashierId = cashierId }
         )
         .Then(
-            { BankAccountId = bankAccountId
-              Amount = amount
-              CashierId = cashierId
-              RecordedAt = now
-              Version = 2 }
-            |> Event.DepositRecorded
+            DepositRecorded
+                { BankAccountId = bankAccountId
+                  Amount = amount
+                  CashierId = cashierId
+                  RecordedAt = now
+                  Version = 2 }
         )
 
 [<Fact>]
@@ -102,8 +105,8 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
             BankAccountClosedWith bankAccountId now 2
         )
         .When(
-        { Amount = amount
-          CashierId = cashierId }
-        |> Command.RecordDeposit
+        RecordDeposit
+            { Amount = amount
+              CashierId = cashierId }
     )
         .ThenThrows<InvalidOperationException>
