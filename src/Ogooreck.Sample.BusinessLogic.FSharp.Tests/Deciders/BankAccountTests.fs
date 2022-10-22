@@ -11,17 +11,18 @@ open FsCheck.Xunit
 let random = Random()
 let now = DateTimeOffset.UtcNow
 
-let getNow = fun () -> now
-
 let spec =
-    Specification.For(decide getNow, evolve, (fun () -> NotInitialised))
+    Specification.For(decide, evolve, (fun () -> NotInitialised))
 
 let BankAccountOpenedWith =
     fun bankAccountId now version ->
-        let accountNumber = AccountNumber.newNumber(Guid.NewGuid().ToString())
+        let accountNumber =
+            AccountNumber.newNumber (Guid.NewGuid().ToString())
 
-        let clientId = ClientId.newId()
-        let currencyISOCode = CurrencyCode.newCode "USD"
+        let clientId = ClientId.newId ()
+
+        let currencyISOCode =
+            CurrencyCode.newCode "USD"
 
         BankAccountOpened
             { BankAccountId = bankAccountId
@@ -55,7 +56,8 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
                 { BankAccountId = bankAccountId
                   AccountNumber = accountNumber
                   ClientId = clientId
-                  CurrencyISOCode = currencyISOCode }
+                  CurrencyISOCode = currencyISOCode
+                  Now = now }
         )
         .Then(
             BankAccountOpened
@@ -65,7 +67,8 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
                   CurrencyISOCode = currencyISOCode
                   CreatedAt = now
                   Version = 1 }
-        ) |> ignore
+        )
+    |> ignore
 
 [<Property>]
 let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit is recorded``
@@ -78,7 +81,8 @@ let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit
         .When(
             RecordDeposit
                 { Amount = amount
-                  CashierId = cashierId }
+                  CashierId = cashierId
+                  Now = now }
         )
         .Then(
             DepositRecorded
@@ -87,7 +91,8 @@ let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit
                   CashierId = cashierId
                   RecordedAt = now
                   Version = 2 }
-        ) |> ignore
+        )
+    |> ignore
 
 [<Property>]
 let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails with invalid operation exception``
@@ -103,6 +108,8 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
         .When(
         RecordDeposit
             { Amount = amount
-              CashierId = cashierId }
+              CashierId = cashierId
+              Now = now }
     )
-        .ThenThrows<InvalidOperationException> |> ignore
+        .ThenThrows<InvalidOperationException>
+    |> ignore
