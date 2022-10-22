@@ -101,7 +101,7 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
     spec
         .Given(
             BankAccountOpenedWith bankAccountId now 1,
-            BankAccountClosedWith bankAccountId now 1
+            BankAccountClosedWith bankAccountId now 2
         )
         .When(
             { Amount = amount

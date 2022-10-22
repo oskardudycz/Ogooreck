@@ -44,7 +44,7 @@ let withdrawCashFromATM now (command, bankAccount) =
         invalidOp "Account is closed!"
 
     if (bankAccount.Balance < command.Amount) then
-        invalidOp "Account is closed!"
+        invalidOp "Not enough money!"
 
     { BankAccountId = bankAccount.Id
       Amount = command.Amount
