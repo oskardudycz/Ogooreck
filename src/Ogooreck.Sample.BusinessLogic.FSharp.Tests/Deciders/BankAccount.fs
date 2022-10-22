@@ -44,45 +44,25 @@ type BankAccount =
            Version: int64 |}
     | Closed of {| Id: Guid; Version: int64 |}
 
-    static member Create(opened: BankAccountOpened) =
-        Open
-            {| Id = opened.BankAccountId
-               Balance = 0M
-               Version = 1 |}
-
-    member this.Apply(depositRecorded: DepositRecorded) =
-        match this with
-        | Open openAccount ->
-            {| openAccount with
-                Balance = openAccount.Balance + depositRecorded.Amount
-                Version = depositRecorded.Version |}
-            |> BankAccount.Open
-        | NotInitialised _ -> this
-        | Closed _ -> this
-
-    member this.Apply(depositRecorded: CashWithdrawnFromATM) =
-        match this with
-        | Open openAccount ->
-            {| openAccount with
-                Balance = openAccount.Balance - depositRecorded.Amount
-                Version = depositRecorded.Version |}
-            |> BankAccount.Open
-        | NotInitialised _ -> this
-        | Closed _ -> this
-
-    member this.Apply(bankAccountClosed: BankAccountClosed) =
-        match this with
-        | Open openAccount ->
-            {| Id = openAccount.Id
-               Version = bankAccountClosed.Version |}
-            |> BankAccount.Closed
-        | NotInitialised _ -> this
-        | Closed _ -> this
-
-
 let evolve (state: BankAccount) (event: Event) : BankAccount =
-    match event with
-    | BankAccountOpened e -> BankAccount.Create(e)
-    | DepositRecorded e -> state.Apply(e)
-    | CashWithdrawnFromATM e -> state.Apply(e)
-    | BankAccountClosed e -> state.Apply(e)
+    match (state, event) with
+    | NotInitialised _, BankAccountOpened opened ->
+        {| Id = opened.BankAccountId
+           Balance = 0M
+           Version = 1L |}
+        |> Open
+    | Open openAccount, DepositRecorded depositRecorded ->
+        {| openAccount with
+            Balance = openAccount.Balance + depositRecorded.Amount
+            Version = depositRecorded.Version |}
+        |> Open
+    | Open openAccount, CashWithdrawnFromATM cashWithdrawnFromAtm ->
+        {| openAccount with
+            Balance = openAccount.Balance - cashWithdrawnFromAtm.Amount
+            Version = cashWithdrawnFromAtm.Version |}
+        |> BankAccount.Open
+    | Open openAccount, BankAccountClosed bankAccountClosed ->
+        {| Id = openAccount.Id
+           Version = bankAccountClosed.Version |}
+        |> Closed
+    | _ -> state
