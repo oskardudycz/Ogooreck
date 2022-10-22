@@ -12,7 +12,7 @@ let now = DateTimeOffset.UtcNow
 
 let getNow = fun () -> now
 
-let spec = Specification.For(decide getNow, evolve)
+let spec = Specification.For(decide getNow, evolve, fun () -> NotInitialised )
 
 let BankAccountOpenedWith =
     fun bankAccountId now version ->
@@ -85,7 +85,7 @@ let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit
               Amount = amount
               CashierId = cashierId
               RecordedAt = now
-              Version = 1 }
+              Version = 2 }
             |> Event.DepositRecorded
         )
 
