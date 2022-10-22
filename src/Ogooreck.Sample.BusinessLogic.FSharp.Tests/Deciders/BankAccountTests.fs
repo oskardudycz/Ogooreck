@@ -12,8 +12,7 @@ let now = DateTimeOffset.UtcNow
 
 let getNow = fun () -> now
 
-let spec =
-    Specification.For(decide getNow, evolve)
+let spec = Specification.For(decide getNow, evolve)
 
 let BankAccountOpenedWith =
     fun bankAccountId now version ->
@@ -42,8 +41,7 @@ let BankAccountClosedWith =
 let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened`` () =
     let bankAccountId = Guid.NewGuid()
 
-    let accountNumber =
-        Guid.NewGuid().ToString()
+    let accountNumber = Guid.NewGuid().ToString()
 
     let clientId = Guid.NewGuid()
     let currencyISOCode = "USD"
@@ -104,8 +102,8 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
             BankAccountClosedWith bankAccountId now 2
         )
         .When(
-            { Amount = amount
-              CashierId = cashierId }
-            |> Command.RecordDeposit
-        )
+        { Amount = amount
+          CashierId = cashierId }
+        |> Command.RecordDeposit
+    )
         .ThenThrows<InvalidOperationException>
