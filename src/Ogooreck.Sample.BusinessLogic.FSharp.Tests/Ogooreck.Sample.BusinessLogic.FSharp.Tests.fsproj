@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Deciders\BankAccountPrimitives.fs" />
         <Compile Include="Deciders\BankAccount.fs" />
         <Compile Include="Deciders\BankAccountDecider.fs" />
         <Compile Include="Deciders\BankAccountTests.fs" />

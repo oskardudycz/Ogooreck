@@ -1,16 +1,16 @@
 ﻿module Deciders.BankAccountDecider
 
-open System
 open BankAccount
+open BankAccountPrimitives
 
 type OpenBankAccount =
-    { BankAccountId: Guid
-      AccountNumber: string
-      ClientId: Guid
-      CurrencyISOCode: string }
+    { BankAccountId: AccountId
+      AccountNumber: AccountNumber
+      ClientId: ClientId
+      CurrencyISOCode: CurrencyCode }
 
-type RecordDeposit = { Amount: decimal; CashierId: Guid }
-type WithdrawCashFromATM = { Amount: decimal; AtmId: Guid }
+type RecordDeposit = { Amount: decimal; CashierId: CashierId }
+type WithdrawCashFromATM = { Amount: decimal; AtmId: AtmId }
 type CloseBankAccount = { Reason: string }
 
 type Command =

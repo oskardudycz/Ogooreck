@@ -1,31 +1,32 @@
 ﻿module Deciders.BankAccount
 
 open System
+open BankAccountPrimitives
 
 type BankAccountOpened =
-    { BankAccountId: Guid
-      AccountNumber: string
-      ClientId: Guid
-      CurrencyISOCode: string
+    { BankAccountId: AccountId
+      AccountNumber: AccountNumber
+      ClientId: ClientId
+      CurrencyISOCode: CurrencyCode
       CreatedAt: DateTimeOffset
       Version: int64 }
 
 type DepositRecorded =
-    { BankAccountId: Guid
+    { BankAccountId: AccountId
       Amount: decimal
-      CashierId: Guid
+      CashierId: CashierId
       RecordedAt: DateTimeOffset
       Version: int64 }
 
 type CashWithdrawnFromATM =
-    { BankAccountId: Guid
+    { BankAccountId: AccountId
       Amount: decimal
-      ATMId: Guid
+      ATMId: AtmId
       RecordedAt: DateTimeOffset
       Version: int64 }
 
 type BankAccountClosed =
-    { BankAccountId: Guid
+    { BankAccountId: AccountId
       Reason: string
       ClosedAt: DateTimeOffset
       Version: int64 }
@@ -39,10 +40,10 @@ type Event =
 type BankAccount =
     | NotInitialised
     | Open of
-        {| Id: Guid
+        {| Id: AccountId
            Balance: decimal
            Version: int64 |}
-    | Closed of {| Id: Guid; Version: int64 |}
+    | Closed of {| Id: AccountId; Version: int64 |}
 
 let evolve (state: BankAccount) (event: Event) : BankAccount =
     match (state, event) with
