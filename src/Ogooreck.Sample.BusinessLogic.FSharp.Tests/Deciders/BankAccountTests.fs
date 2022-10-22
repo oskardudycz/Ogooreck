@@ -2,10 +2,10 @@ module BankAccountTests
 
 open System
 open Deciders.BankAccount
+open FsCheck
 open Ogooreck.BusinessLogic
 open Deciders.BankAccountDecider
-open Xunit
-
+open FsCheck.Xunit
 
 let random = Random()
 let now = DateTimeOffset.UtcNow
@@ -39,16 +39,13 @@ let BankAccountClosedWith =
               ClosedAt = now
               Version = version }
 
-[<Fact>]
-let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened`` () =
-    let bankAccountId = Guid.NewGuid()
-
-    let accountNumber =
-        Guid.NewGuid().ToString()
-
-    let clientId = Guid.NewGuid()
-    let currencyISOCode = "USD"
-
+[<Property>]
+let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened``
+    bankAccountId
+    accountNumber
+    clientId
+    currencyISOCode
+    =
     let notExistingAccount = Array.empty<_>
 
     spec
@@ -68,14 +65,14 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
                   CurrencyISOCode = currencyISOCode
                   CreatedAt = now
                   Version = 1 }
-        )
+        ) |> ignore
 
-[<Fact>]
-let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit is recorded`` () =
-    let bankAccountId = Guid.NewGuid()
-    let amount = decimal (random.NextDouble())
-    let cashierId = Guid.NewGuid()
-
+[<Property>]
+let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit is recorded``
+    bankAccountId
+    amount
+    cashierId
+    =
     spec
         .Given(BankAccountOpenedWith bankAccountId now 1)
         .When(
@@ -90,15 +87,14 @@ let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit
                   CashierId = cashierId
                   RecordedAt = now
                   Version = 2 }
-        )
+        ) |> ignore
 
-[<Fact>]
-let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails with invalid operation exception`` () =
-    let bankAccountId = Guid.NewGuid()
-
-    let amount = decimal (random.NextDouble())
-    let cashierId = Guid.NewGuid()
-
+[<Property>]
+let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails with invalid operation exception``
+    bankAccountId
+    amount
+    cashierId
+    =
     spec
         .Given(
             BankAccountOpenedWith bankAccountId now 1,
@@ -109,4 +105,4 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
             { Amount = amount
               CashierId = cashierId }
     )
-        .ThenThrows<InvalidOperationException>
+        .ThenThrows<InvalidOperationException> |> ignore
