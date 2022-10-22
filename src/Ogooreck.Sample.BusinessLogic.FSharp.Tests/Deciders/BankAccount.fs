@@ -47,22 +47,22 @@ type BankAccount =
 let evolve (state: BankAccount) (event: Event) : BankAccount =
     match (state, event) with
     | NotInitialised _, BankAccountOpened opened ->
-        {| Id = opened.BankAccountId
-           Balance = 0M
-           Version = 1L |}
-        |> Open
+        Open
+            {| Id = opened.BankAccountId
+               Balance = 0M
+               Version = 1L |}
     | Open openAccount, DepositRecorded depositRecorded ->
-        {| openAccount with
-            Balance = openAccount.Balance + depositRecorded.Amount
-            Version = depositRecorded.Version |}
-        |> Open
+        Open
+            {| openAccount with
+                Balance = openAccount.Balance + depositRecorded.Amount
+                Version = depositRecorded.Version |}
     | Open openAccount, CashWithdrawnFromATM cashWithdrawnFromAtm ->
-        {| openAccount with
-            Balance = openAccount.Balance - cashWithdrawnFromAtm.Amount
-            Version = cashWithdrawnFromAtm.Version |}
-        |> BankAccount.Open
+        Open
+            {| openAccount with
+                Balance = openAccount.Balance - cashWithdrawnFromAtm.Amount
+                Version = cashWithdrawnFromAtm.Version |}
     | Open openAccount, BankAccountClosed bankAccountClosed ->
-        {| Id = openAccount.Id
-           Version = bankAccountClosed.Version |}
-        |> Closed
+        Closed
+            {| Id = openAccount.Id
+               Version = bankAccountClosed.Version |}
     | _ -> state
