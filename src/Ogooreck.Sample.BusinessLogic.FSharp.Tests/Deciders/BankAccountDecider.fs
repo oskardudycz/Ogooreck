@@ -28,44 +28,44 @@ let openBankAccount now command =
       Version = 1 }
     |> BankAccountOpened
 
-let recordDeposit now (command: RecordDeposit, bankAccount) =
-    if (bankAccount.Status = BankAccountStatus.Closed) then
-        invalidOp "Account is closed!"
+let recordDeposit now (command: RecordDeposit) (bankAccount: BankAccount) =
+    match bankAccount with
+    | Closed _ -> invalidOp "Account is closed!"
+    | Open openBankAccount ->
+        { BankAccountId = openBankAccount.Id
+          Amount = command.Amount
+          CashierId = command.CashierId
+          RecordedAt = now ()
+          Version = openBankAccount.Version + 1L }
+        |> DepositRecorded
 
-    { BankAccountId = bankAccount.Id
-      Amount = command.Amount
-      CashierId = command.CashierId
-      RecordedAt = now ()
-      Version = bankAccount.Version + 1L }
-    |> DepositRecorded
+let withdrawCashFromATM now (command: WithdrawCashFromATM) (bankAccount: BankAccount) =
+    match bankAccount with
+    | Closed _ -> invalidOp "Account is closed!"
+    | Open openBankAccount ->
+        if (openBankAccount.Balance < command.Amount) then
+            invalidOp "Not enough money!"
 
-let withdrawCashFromATM now (command, bankAccount) =
-    if (bankAccount.Status = BankAccountStatus.Closed) then
-        invalidOp "Account is closed!"
+        { BankAccountId = openBankAccount.Id
+          Amount = command.Amount
+          ATMId = command.AtmId
+          RecordedAt = now ()
+          Version = openBankAccount.Version + 1L }
+        |> CashWithdrawnFromATM
 
-    if (bankAccount.Balance < command.Amount) then
-        invalidOp "Not enough money!"
-
-    { BankAccountId = bankAccount.Id
-      Amount = command.Amount
-      ATMId = command.AtmId
-      RecordedAt = now ()
-      Version = bankAccount.Version + 1L }
-    |> CashWithdrawnFromATM
-
-let closeBankAccount now (command, bankAccount) =
-    if (bankAccount.Status = BankAccountStatus.Closed) then
-        invalidOp "Account is already closed!"
-
-    { BankAccountId = bankAccount.Id
-      Reason = command.Reason
-      ClosedAt = now ()
-      Version = bankAccount.Version + 1L }
-    |> BankAccountClosed
+let closeBankAccount now (command: CloseBankAccount) (bankAccount: BankAccount) =
+    match bankAccount with
+    | Closed _ -> invalidOp "Account is already closed!"
+    | Open openBankAccount ->
+        { BankAccountId = openBankAccount.Id
+          Reason = command.Reason
+          ClosedAt = now ()
+          Version = openBankAccount.Version + 1L }
+        |> BankAccountClosed
 
 let decide now command bankAccount =
     match command with
     | OpenBankAccount c -> openBankAccount now c
-    | RecordDeposit c -> recordDeposit now (c, bankAccount)
-    | WithdrawCashFromATM c -> withdrawCashFromATM now (c, bankAccount)
-    | CloseBankAccount c -> closeBankAccount now (c, bankAccount)
+    | RecordDeposit c -> recordDeposit now c bankAccount
+    | WithdrawCashFromATM c -> withdrawCashFromATM now c bankAccount
+    | CloseBankAccount c -> closeBankAccount now c bankAccount

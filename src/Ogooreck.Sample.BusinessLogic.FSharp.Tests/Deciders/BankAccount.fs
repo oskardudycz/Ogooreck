@@ -36,39 +36,47 @@ type Event =
     | CashWithdrawnFromATM of CashWithdrawnFromATM
     | BankAccountClosed of BankAccountClosed
 
-type BankAccountStatus =
-    | Opened
-    | Closed
-
 type BankAccount =
-    { Id: Guid
-      Status: BankAccountStatus
-      Balance: decimal
-      Version: int64 }
+    | Open of
+        {| Id: Guid
+           Balance: decimal
+           Version: int64 |}
+    | Closed of {| Id: Guid; Version: int64 |}
 
     static member Create(opened: BankAccountOpened) =
-        { Id = opened.BankAccountId
-          Status = Opened
-          Balance = 0M
-          Version = 0 }
+        Open
+            {| Id = opened.BankAccountId
+               Balance = 0M
+               Version = 1 |}
 
     member this.Apply(depositRecorded: DepositRecorded) =
-        { this with
-            Balance = this.Balance + depositRecorded.Amount
-            Version = depositRecorded.Version }
+        match this with
+        | Open openAccount ->
+            {| openAccount with
+                Balance = openAccount.Balance + depositRecorded.Amount
+                Version = depositRecorded.Version |}
+            |> BankAccount.Open
+        | Closed _ -> this
 
     member this.Apply(depositRecorded: CashWithdrawnFromATM) =
-        { this with
-            Balance = this.Balance - depositRecorded.Amount
-            Version = depositRecorded.Version }
+        match this with
+        | Open openAccount ->
+            {| openAccount with
+                Balance = openAccount.Balance - depositRecorded.Amount
+                Version = depositRecorded.Version |}
+            |> BankAccount.Open
+        | Closed _ -> this
 
-    member this.Apply(depositRecorded: BankAccountClosed) =
-        { this with
-            Status = BankAccountStatus.Closed
-            Version = depositRecorded.Version }
+    member this.Apply(bankAccountClosed: BankAccountClosed) =
+        match this with
+        | Open openAccount ->
+            {| Id = openAccount.Id
+               Version = bankAccountClosed.Version |}
+            |> BankAccount.Closed
+        | Closed _ -> this
 
 
-let evolve (state: BankAccount) (event: Event) =
+let evolve (state: BankAccount) (event: Event) : BankAccount =
     match event with
     | BankAccountOpened e -> BankAccount.Create(e)
     | DepositRecorded e -> state.Apply(e)
