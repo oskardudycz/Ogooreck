@@ -2,6 +2,7 @@ module BankAccountTests
 
 open System
 open Deciders.BankAccount
+open Deciders.BankAccountPrimitives
 open FsCheck
 open Ogooreck.BusinessLogic
 open Deciders.BankAccountDecider
@@ -17,11 +18,10 @@ let spec =
 
 let BankAccountOpenedWith =
     fun bankAccountId now version ->
-        let accountNumber =
-            Guid.NewGuid().ToString()
+        let accountNumber = AccountNumber.newNumber(Guid.NewGuid().ToString())
 
-        let clientId = Guid.NewGuid()
-        let currencyISOCode = "USD"
+        let clientId = ClientId.newId()
+        let currencyISOCode = CurrencyCode.newCode "USD"
 
         BankAccountOpened
             { BankAccountId = bankAccountId
