@@ -3,7 +3,6 @@
 
 public static class Specification
 {
-
     public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
         Decider<TCommand, TEvent, TState> decider
     ) =>
@@ -24,11 +23,26 @@ public static class Specification
         For(Decider.For(decide, evolve, getInitialState));
 
     public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
+        Func<TCommand, TState, TEvent[]> decide,
+        Func<TState, TEvent, TState>? evolve = null,
+        TState? initialState = default
+    ) where TState : notnull =>
+        For(Decider.For(decide, evolve, (!Equals(initialState, default) ? () => initialState : default)));
+
+
+    public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
         Func<TCommand, TState, TEvent> decide,
         Func<TState, TEvent, TState>? evolve = null,
         Func<TState>? getInitialState = null
     ) =>
         For(Decider.For(decide, evolve, getInitialState));
+
+    public static DeciderSpecification<TCommand, TEvent, TState> For<TCommand, TEvent, TState>(
+        Func<TCommand, TState, TEvent> decide,
+        Func<TState, TEvent, TState>? evolve = null,
+        TState? initialState = default
+    ) =>
+        For(Decider.For(decide, evolve, (!Equals(initialState, default) ? () => initialState : default)));
 
     public static DeciderSpecification<TState> For<TState>(
         Func<object, TState, object> decide,
@@ -36,7 +50,6 @@ public static class Specification
         Func<TState>? getInitialState = null
     ) =>
         new(Decider.For(decide, evolve, getInitialState));
-
     public static DeciderSpecification<TState> For<TState>(
         Func<object, TState, object[]> decide,
         Func<TState, object, TState>? evolve = null,

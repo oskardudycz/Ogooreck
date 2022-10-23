@@ -10,7 +10,7 @@ open FsCheck.Xunit
 let random = Random()
 
 let spec =
-    Specification.For(decide, evolve, (fun () -> Initial))
+    Specification.For(decide, evolve, Initial)
 
 let BankAccountOpenedWith bankAccountId now version =
     let accountNumber =
