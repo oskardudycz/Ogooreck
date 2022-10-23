@@ -27,10 +27,10 @@ module CashierId =
     let newId () = CashierId(Guid.NewGuid())
 
 [<Struct>]
-type CurrencyCode = CurrencyCode of string
+type CurrencyIsoCode = CurrencyIsoCode of string
 
-module CurrencyCode =
-    let newCode code = CurrencyCode(code)
+module CurrencyIsoCode =
+    let newCode code = CurrencyIsoCode(code)
 
 [<Struct>]
 type AccountNumber = AccountNumber of string
