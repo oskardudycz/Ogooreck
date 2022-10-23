@@ -1,39 +1,39 @@
 ﻿module Deciders.BankAccountPrimitives
 
 open System
+open FSharp.UMX
 
-[<Struct>]
-type AccountId = AccountId of Guid
-
+type AccountId = Guid<accountId>
+and  [<Measure>] accountId
 module AccountId =
-    let newId () = AccountId(Guid.NewGuid())
+    let parse (value:Guid): AccountId = UMX.tag value
+    let newId () = Guid.NewGuid >> parse
 
-[<Struct>]
-type ClientId = ClientId of Guid
-
+type ClientId = Guid<clientId>
+and  [<Measure>] clientId
 module ClientId =
-    let newId () = ClientId(Guid.NewGuid())
+    let parse (value:Guid): ClientId = UMX.tag value
+    let newId = Guid.NewGuid >> parse
 
-[<Struct>]
-type AtmId = AtmId of Guid
-
+type AtmId = Guid<atmId>
+and  [<Measure>] atmId
 module AtmId =
-    let newId () = AtmId(Guid.NewGuid())
+    let parse (value:Guid): AtmId = UMX.tag value
+    let newId = Guid.NewGuid >> parse
 
-[<Struct>]
-type CashierId = CashierId of Guid
-
+type CashierId = Guid<cashierId>
+and  [<Measure>] cashierId
 module CashierId =
-    let newId () = CashierId(Guid.NewGuid())
+    let parse (value:Guid): CashierId = UMX.tag value
+    let newId = Guid.NewGuid >> parse
 
-[<Struct>]
-type CurrencyIsoCode = CurrencyIsoCode of string
-
+type CurrencyIsoCode = string<currencyIsoCode>
+and  [<Measure>] currencyIsoCode
 module CurrencyIsoCode =
-    let newCode code = CurrencyIsoCode(code)
+    let parse (value:string): CurrencyIsoCode = UMX.tag value
 
-[<Struct>]
-type AccountNumber = AccountNumber of string
 
+type AccountNumber = string<accountNumber>
+and  [<Measure>] accountNumber
 module AccountNumber =
-    let newNumber number = AccountNumber(number)
+    let parse (value:string): AccountNumber = UMX.tag value

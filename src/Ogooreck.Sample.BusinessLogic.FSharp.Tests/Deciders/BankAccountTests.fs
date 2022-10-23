@@ -14,12 +14,12 @@ let spec =
 
 let BankAccountOpenedWith bankAccountId now version =
     let accountNumber =
-        AccountNumber.newNumber (Guid.NewGuid().ToString())
+        AccountNumber.parse (Guid.NewGuid().ToString())
 
-    let clientId = ClientId.newId ()
+    let clientId = ClientId.newId()
 
     let currencyISOCode =
-        CurrencyIsoCode.newCode "USD"
+        CurrencyIsoCode.parse "USD"
 
     BankAccountOpened
         { BankAccountId = bankAccountId
