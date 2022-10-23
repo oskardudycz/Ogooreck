@@ -45,25 +45,25 @@ type BankAccount =
            Version: int64 |}
     | Closed of {| Id: AccountId; Version: int64 |}
 
-let evolve (state: BankAccount) (event: Event) : BankAccount =
-    match state, event with
-    | Initial _, BankAccountOpened opened ->
+let evolve bankAccount bankAccountEvent : BankAccount =
+    match bankAccount, bankAccountEvent with
+    | Initial _, BankAccountOpened event ->
         Open
-            {| Id = opened.BankAccountId
+            {| Id = event.BankAccountId
                Balance = 0M
                Version = 1L |}
-    | Open openAccount, DepositRecorded depositRecorded ->
+    | Open state, DepositRecorded event ->
         Open
-            {| openAccount with
-                Balance = openAccount.Balance + depositRecorded.Amount
-                Version = depositRecorded.Version |}
-    | Open openAccount, CashWithdrawnFromAtm cashWithdrawnFromAtm ->
+            {| state with
+                Balance = state.Balance + event.Amount
+                Version = event.Version |}
+    | Open state, CashWithdrawnFromAtm event ->
         Open
-            {| openAccount with
-                Balance = openAccount.Balance - cashWithdrawnFromAtm.Amount
-                Version = cashWithdrawnFromAtm.Version |}
-    | Open openAccount, BankAccountClosed bankAccountClosed ->
+            {| state with
+                Balance = state.Balance - event.Amount
+                Version = event.Version |}
+    | Open state, BankAccountClosed bankAccountClosed ->
         Closed
-            {| Id = openAccount.Id
+            {| Id = state.Id
                Version = bankAccountClosed.Version |}
-    | _ -> state
+    | _ -> bankAccount

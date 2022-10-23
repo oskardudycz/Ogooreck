@@ -11,8 +11,16 @@ type OpenBankAccount =
       CurrencyIsoCode: CurrencyIsoCode
       Now: DateTimeOffset }
 
-type RecordDeposit = { Amount: decimal; CashierId: CashierId; Now: DateTimeOffset }
-type WithdrawCashFromAtm = { Amount: decimal; AtmId: AtmId; Now: DateTimeOffset }
+type RecordDeposit =
+    { Amount: decimal
+      CashierId: CashierId
+      Now: DateTimeOffset }
+
+type WithdrawCashFromAtm =
+    { Amount: decimal
+      AtmId: AtmId
+      Now: DateTimeOffset }
+
 type CloseBankAccount = { Reason: string; Now: DateTimeOffset }
 
 type Command =
@@ -21,7 +29,7 @@ type Command =
     | WithdrawCashFromAtm of WithdrawCashFromAtm
     | CloseBankAccount of CloseBankAccount
 
-let openBankAccount (command: OpenBankAccount) (bankAccount: BankAccount) =
+let openBankAccount (command: OpenBankAccount) bankAccount : Event =
     match bankAccount with
     | Open _ -> invalidOp "Account is already opened!"
     | Closed _ -> invalidOp "Account is already closed!"
@@ -34,43 +42,43 @@ let openBankAccount (command: OpenBankAccount) (bankAccount: BankAccount) =
               CreatedAt = command.Now
               Version = 1 }
 
-let recordDeposit (command: RecordDeposit) (bankAccount: BankAccount) =
+let recordDeposit (command: RecordDeposit) bankAccount : Event =
     match bankAccount with
     | Initial _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is closed!"
-    | Open openBankAccount ->
+    | Open state ->
         DepositRecorded
-            { BankAccountId = openBankAccount.Id
+            { BankAccountId = state.Id
               Amount = command.Amount
               CashierId = command.CashierId
-              RecordedAt  = command.Now
-              Version = openBankAccount.Version + 1L }
+              RecordedAt = command.Now
+              Version = state.Version + 1L }
 
-let withdrawCashFromAtm (command: WithdrawCashFromAtm) (bankAccount: BankAccount) =
+let withdrawCashFromAtm (command: WithdrawCashFromAtm) bankAccount : Event =
     match bankAccount with
     | Initial _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is closed!"
-    | Open openBankAccount ->
-        if (openBankAccount.Balance < command.Amount) then
+    | Open state ->
+        if (state.Balance < command.Amount) then
             invalidOp "Not enough money!"
 
         CashWithdrawnFromAtm
-            { BankAccountId = openBankAccount.Id
+            { BankAccountId = state.Id
               Amount = command.Amount
               AtmId = command.AtmId
               RecordedAt = command.Now
-              Version = openBankAccount.Version + 1L }
+              Version = state.Version + 1L }
 
-let closeBankAccount (command: CloseBankAccount) (bankAccount: BankAccount) =
+let closeBankAccount (command: CloseBankAccount) bankAccount : Event =
     match bankAccount with
     | Initial _ -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is already closed!"
-    | Open openBankAccount ->
+    | Open state ->
         BankAccountClosed
-            { BankAccountId = openBankAccount.Id
+            { BankAccountId = state.Id
               Reason = command.Reason
               ClosedAt = command.Now
-              Version = openBankAccount.Version + 1L }
+              Version = state.Version + 1L }
 
 let decide command bankAccount =
     match command with
