@@ -2,9 +2,6 @@
 
     <PropertyGroup>
         <TargetFramework>net6.0</TargetFramework>
-
-        <IsPackable>false</IsPackable>
-        <GenerateProgramFile>false</GenerateProgramFile>
     </PropertyGroup>
 
     <ItemGroup>
@@ -12,7 +9,6 @@
         <Compile Include="Deciders\BankAccount.fs" />
         <Compile Include="Deciders\BankAccountDecider.fs" />
         <Compile Include="Deciders\BankAccountTests.fs" />
-        <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>

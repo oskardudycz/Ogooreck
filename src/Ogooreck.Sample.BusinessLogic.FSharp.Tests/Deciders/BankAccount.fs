@@ -7,7 +7,7 @@ type BankAccountOpened =
     { BankAccountId: AccountId
       AccountNumber: AccountNumber
       ClientId: ClientId
-      CurrencyISOCode: CurrencyCode
+      CurrencyIsoCode: CurrencyIsoCode
       CreatedAt: DateTimeOffset
       Version: int64 }
 
@@ -21,7 +21,7 @@ type DepositRecorded =
 type CashWithdrawnFromATM =
     { BankAccountId: AccountId
       Amount: decimal
-      ATMId: AtmId
+      AtmId: AtmId
       RecordedAt: DateTimeOffset
       Version: int64 }
 
@@ -34,11 +34,11 @@ type BankAccountClosed =
 type Event =
     | BankAccountOpened of BankAccountOpened
     | DepositRecorded of DepositRecorded
-    | CashWithdrawnFromATM of CashWithdrawnFromATM
+    | CashWithdrawnFromAtm of CashWithdrawnFromATM
     | BankAccountClosed of BankAccountClosed
 
 type BankAccount =
-    | NotInitialised
+    | Initial
     | Open of
         {| Id: AccountId
            Balance: decimal
@@ -46,8 +46,8 @@ type BankAccount =
     | Closed of {| Id: AccountId; Version: int64 |}
 
 let evolve (state: BankAccount) (event: Event) : BankAccount =
-    match (state, event) with
-    | NotInitialised _, BankAccountOpened opened ->
+    match state, event with
+    | Initial _, BankAccountOpened opened ->
         Open
             {| Id = opened.BankAccountId
                Balance = 0M
@@ -57,7 +57,7 @@ let evolve (state: BankAccount) (event: Event) : BankAccount =
             {| openAccount with
                 Balance = openAccount.Balance + depositRecorded.Amount
                 Version = depositRecorded.Version |}
-    | Open openAccount, CashWithdrawnFromATM cashWithdrawnFromAtm ->
+    | Open openAccount, CashWithdrawnFromAtm cashWithdrawnFromAtm ->
         Open
             {| openAccount with
                 Balance = openAccount.Balance - cashWithdrawnFromAtm.Amount

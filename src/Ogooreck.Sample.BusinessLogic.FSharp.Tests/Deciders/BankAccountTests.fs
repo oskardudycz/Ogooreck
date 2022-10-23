@@ -3,42 +3,38 @@ module BankAccountTests
 open System
 open Deciders.BankAccount
 open Deciders.BankAccountPrimitives
-open FsCheck
 open Ogooreck.BusinessLogic
 open Deciders.BankAccountDecider
 open FsCheck.Xunit
 
 let random = Random()
-let now = DateTimeOffset.UtcNow
 
 let spec =
-    Specification.For(decide, evolve, (fun () -> NotInitialised))
+    Specification.For(decide, evolve, (fun () -> Initial))
 
-let BankAccountOpenedWith =
-    fun bankAccountId now version ->
-        let accountNumber =
-            AccountNumber.newNumber (Guid.NewGuid().ToString())
+let BankAccountOpenedWith bankAccountId now version =
+    let accountNumber =
+        AccountNumber.newNumber (Guid.NewGuid().ToString())
 
-        let clientId = ClientId.newId ()
+    let clientId = ClientId.newId ()
 
-        let currencyISOCode =
-            CurrencyCode.newCode "USD"
+    let currencyISOCode =
+        CurrencyIsoCode.newCode "USD"
 
-        BankAccountOpened
-            { BankAccountId = bankAccountId
-              AccountNumber = accountNumber
-              ClientId = clientId
-              CurrencyISOCode = currencyISOCode
-              CreatedAt = now
-              Version = version }
+    BankAccountOpened
+        { BankAccountId = bankAccountId
+          AccountNumber = accountNumber
+          ClientId = clientId
+          CurrencyIsoCode = currencyISOCode
+          CreatedAt = now
+          Version = version }
 
-let BankAccountClosedWith =
-    fun bankAccountId now version ->
-        BankAccountClosed
-            { BankAccountId = bankAccountId
-              Reason = Guid.NewGuid().ToString()
-              ClosedAt = now
-              Version = version }
+let BankAccountClosedWith bankAccountId now version =
+    BankAccountClosed
+        { BankAccountId = bankAccountId
+          Reason = Guid.NewGuid().ToString()
+          ClosedAt = now
+          Version = version }
 
 [<Property>]
 let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened``
@@ -46,8 +42,9 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
     accountNumber
     clientId
     currencyISOCode
+    now
     =
-    let notExistingAccount = Array.empty<_>
+    let notExistingAccount = Array.empty
 
     spec
         .Given(notExistingAccount)
@@ -56,7 +53,7 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
                 { BankAccountId = bankAccountId
                   AccountNumber = accountNumber
                   ClientId = clientId
-                  CurrencyISOCode = currencyISOCode
+                  CurrencyIsoCode = currencyISOCode
                   Now = now }
         )
         .Then(
@@ -64,7 +61,7 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
                 { BankAccountId = bankAccountId
                   AccountNumber = accountNumber
                   ClientId = clientId
-                  CurrencyISOCode = currencyISOCode
+                  CurrencyIsoCode = currencyISOCode
                   CreatedAt = now
                   Version = 1 }
         )
@@ -75,6 +72,7 @@ let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit
     bankAccountId
     amount
     cashierId
+    now
     =
     spec
         .Given(BankAccountOpenedWith bankAccountId now 1)
@@ -99,6 +97,7 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
     bankAccountId
     amount
     cashierId
+    now
     =
     spec
         .Given(
