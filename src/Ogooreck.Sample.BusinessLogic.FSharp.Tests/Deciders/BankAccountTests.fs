@@ -3,8 +3,8 @@ module BankAccountTests
 open System
 open Deciders.BankAccount
 open Deciders.BankAccountPrimitives
-open Ogooreck.BusinessLogic
 open Deciders.BankAccountDecider
+open Ogooreck.BusinessLogic
 open FsCheck.Xunit
 
 let random = Random()
@@ -16,7 +16,7 @@ let BankAccountOpenedWith bankAccountId now version =
     let accountNumber =
         AccountNumber.parse (Guid.NewGuid().ToString())
 
-    let clientId = ClientId.newId()
+    let clientId = ClientId.newId ()
 
     let currencyISOCode =
         CurrencyIsoCode.parse "USD"
@@ -105,10 +105,10 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
             BankAccountClosedWith bankAccountId now 2
         )
         .When(
-        RecordDeposit
-            { Amount = amount
-              CashierId = cashierId
-              Now = now }
-    )
+            RecordDeposit
+                { Amount = amount
+                  CashierId = cashierId
+                  Now = now }
+        )
         .ThenThrows<InvalidOperationException>
     |> ignore
