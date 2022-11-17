@@ -23,7 +23,10 @@ Current available for testing:
 - [Business Logic](#business-logic-testing),
 - [API](#api-testing).
 
-Check also [introduction post on my blog](https://event-driven.io/en/ogooreck_sneaky_bdd_testing_framework/).
+Check also my articles: 
+- [Ogooreck introduction](https://event-driven.io/en/ogooreck_sneaky_bdd_testing_framework/),
+- [Testing business logic in Event Sourcing, and beyond!](https://event-driven.io/en/testing_event_sourcing/),
+- [Writing and testing business logic in F#](https://event-driven.io/en/writing_and_testing_business_logic_in_fsharp/).
 
 ## Support
 
@@ -130,6 +133,8 @@ public static class BankAccountEventsBuilder
     }
 }
 ```
+
+See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs).
 
 **F#**
 ```fsharp
@@ -249,7 +254,7 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
     |> ignore
 ```
 
-See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs).
+See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs).
 
 ### Event-Sourced command handlers
 
