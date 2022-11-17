@@ -1,7 +1,7 @@
 ﻿using static Bullseye.Targets;
 using static SimpleExec.Command;
 
-const string framework = "net6.0";
+const string framework = "net7.0";
 const string configuration = "Release";
 
 Target("default", DependsOn("compile"));
