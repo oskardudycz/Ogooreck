@@ -1,17 +1,31 @@
-﻿using System.ComponentModel;
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Newtonsoft.Json;
-using Ogooreck.Newtonsoft;
 
 #pragma warning disable CS1591
 
 namespace Ogooreck.API;
 
-public delegate HttpRequestMessage RequestTransform(HttpRequestMessage request);
+public record MadeApiCall(HttpRequestMessage Request, HttpResponseMessage Response);
+
+public class TestContext
+{
+    public List<MadeApiCall> Calls { get; } = new();
+
+    public void Record(HttpRequestMessage request, HttpResponseMessage response) =>
+        Calls.Add(new MadeApiCall(request, response));
+
+    public T GetCreatedId<T>() where T : notnull =>
+        Calls.First().Response.GetCreatedId<T>();
+}
+
+public record RequestDefinition(RequestTransform[] Transformations);
+
+public delegate HttpRequestMessage RequestTransform(HttpRequestMessage request, TestContext context);
+
+public delegate ValueTask ResponseAssert(HttpResponseMessage response, TestContext context);
 
 public static class ApiSpecification
 {
@@ -25,18 +39,24 @@ public static class ApiSpecification
 
     public static RequestTransform[] SEND(params RequestTransform[] when) => when;
 
+    public static RequestTransform URI(Func<TestContext, string> getUrl) =>
+        URI(ctx => new Uri(getUrl(ctx), UriKind.RelativeOrAbsolute));
+
     public static RequestTransform URI(string uri) =>
         URI(new Uri(uri, UriKind.RelativeOrAbsolute));
 
     public static RequestTransform URI(Uri uri) =>
-        request =>
+        URI(_ => uri);
+
+    public static RequestTransform URI(Func<TestContext, Uri> getUri) =>
+        (request, ctx) =>
         {
-            request.RequestUri = uri;
+            request.RequestUri = getUri(ctx);
             return request;
         };
 
     public static RequestTransform BODY<T>(T body) =>
-        request =>
+        (request, _) =>
         {
             request.Content = JsonContent.Create(body);
 
@@ -44,7 +64,7 @@ public static class ApiSpecification
         };
 
     public static RequestTransform HEADERS(params Action<HttpRequestHeaders>[] headers) =>
-        request =>
+        (request, _) =>
         {
             foreach (var header in headers)
             {
@@ -56,7 +76,7 @@ public static class ApiSpecification
 
 
     public static RequestTransform GET =>
-        request =>
+        (request, _) =>
         {
             request.Method = HttpMethod.Get;
             return request;
@@ -71,7 +91,7 @@ public static class ApiSpecification
     public static RequestTransform OPTIONS => SEND(HttpMethod.Options);
 
     public static RequestTransform SEND(HttpMethod method) =>
-        request =>
+        (request, _) =>
         {
             request.Method = method;
             return request;
@@ -101,7 +121,7 @@ public static class ApiSpecification
         result.ContinueWith(_ => and);
 
     public static Task<GivenApiSpecificationBuilder> And(this Task<Result> result) =>
-        result.ContinueWith(_ => new GivenApiSpecificationBuilder(result.Result.CreateClient));
+        result.ContinueWith(_ => new GivenApiSpecificationBuilder(result.Result.TestContext, result.Result.CreateClient));
 
     public static Task<WhenApiSpecificationBuilder> AndWhen(this Task<Result> result, params RequestTransform[] when) =>
         result.And().When(when);
@@ -111,7 +131,7 @@ public static class ApiSpecification
         Func<HttpResponseMessage, RequestTransform[]> when
     ) =>
         result.ContinueWith(r =>
-            new GivenApiSpecificationBuilder(r.Result.CreateClient).When(when(r.Result.Response))
+            new GivenApiSpecificationBuilder(r.Result.TestContext, r.Result.CreateClient).When(when(r.Result.Response))
         );
 
     public static Task<WhenApiSpecificationBuilder> When(
@@ -122,7 +142,7 @@ public static class ApiSpecification
 
     public static Task<WhenApiSpecificationBuilder> Until(
         this Task<WhenApiSpecificationBuilder> when,
-        Func<HttpResponseMessage, ValueTask<bool>> check,
+        Func<HttpResponseMessage, TestContext, ValueTask<bool>> check,
         int maxNumberOfRetries = 5,
         int retryIntervalInMs = 1000
     ) =>
@@ -130,19 +150,19 @@ public static class ApiSpecification
 
     public static Task<Result> Then(
         this Task<WhenApiSpecificationBuilder> when,
-        Func<HttpResponseMessage, ValueTask> then
+        ResponseAssert then
     ) =>
         when.ContinueWith(t => t.Result.Then(then)).Unwrap();
 
     public static Task<Result> Then(
         this Task<WhenApiSpecificationBuilder> when,
-        params Func<HttpResponseMessage, ValueTask>[] thens
+        params ResponseAssert[] thens
     ) =>
         when.ContinueWith(t => t.Result.Then(thens)).Unwrap();
 
     public static Task<Result> Then(
         this Task<WhenApiSpecificationBuilder> when,
-        IEnumerable<Func<HttpResponseMessage, ValueTask>> thens,
+        IEnumerable<ResponseAssert> thens,
         CancellationToken ct
     ) =>
         when.ContinueWith(t => t.Result.Then(thens, ct), ct).Unwrap();
@@ -160,45 +180,51 @@ public static class ApiSpecification
     ///////////////////
     ////   THEN    ////
     ///////////////////
-    public static Func<HttpResponseMessage, ValueTask> OK = HTTP_STATUS(HttpStatusCode.OK);
-    public static Func<HttpResponseMessage, ValueTask> CREATED = HTTP_STATUS(HttpStatusCode.Created);
-    public static Func<HttpResponseMessage, ValueTask> NO_CONTENT = HTTP_STATUS(HttpStatusCode.NoContent);
-    public static Func<HttpResponseMessage, ValueTask> BAD_REQUEST = HTTP_STATUS(HttpStatusCode.BadRequest);
-    public static Func<HttpResponseMessage, ValueTask> NOT_FOUND = HTTP_STATUS(HttpStatusCode.NotFound);
-    public static Func<HttpResponseMessage, ValueTask> CONFLICT = HTTP_STATUS(HttpStatusCode.Conflict);
+    public static ResponseAssert OK = HTTP_STATUS(HttpStatusCode.OK);
+    public static ResponseAssert CREATED = HTTP_STATUS(HttpStatusCode.Created);
+    public static ResponseAssert NO_CONTENT = HTTP_STATUS(HttpStatusCode.NoContent);
+    public static ResponseAssert BAD_REQUEST = HTTP_STATUS(HttpStatusCode.BadRequest);
+    public static ResponseAssert NOT_FOUND = HTTP_STATUS(HttpStatusCode.NotFound);
+    public static ResponseAssert CONFLICT = HTTP_STATUS(HttpStatusCode.Conflict);
 
-    public static Func<HttpResponseMessage, ValueTask> PRECONDITION_FAILED =
+    public static ResponseAssert PRECONDITION_FAILED =
         HTTP_STATUS(HttpStatusCode.PreconditionFailed);
 
-    public static Func<HttpResponseMessage, ValueTask> METHOD_NOT_ALLOWED =
+    public static ResponseAssert METHOD_NOT_ALLOWED =
         HTTP_STATUS(HttpStatusCode.MethodNotAllowed);
 
-    public static Func<HttpResponseMessage, ValueTask> HTTP_STATUS(HttpStatusCode status) =>
-        response =>
+    public static ResponseAssert HTTP_STATUS(HttpStatusCode status) =>
+        (response, ctx) =>
         {
             response.StatusCode.Should().Be(status);
             return ValueTask.CompletedTask;
         };
 
-
-    public static Func<HttpResponseMessage, ValueTask> CREATED_WITH_DEFAULT_HEADERS(
+    public static ResponseAssert CREATED_WITH_DEFAULT_HEADERS(
         string? locationHeaderPrefix = null, object? eTag = null, bool isETagWeak = true) =>
-        async response =>
+        async (response, ctx) =>
         {
-            await CREATED(response);
-            await RESPONSE_LOCATION_HEADER(locationHeaderPrefix)(response);
+            await CREATED(response, ctx);
+            await RESPONSE_LOCATION_HEADER(locationHeaderPrefix)(response, ctx);
             if (eTag != null)
-                await RESPONSE_ETAG_HEADER(eTag, isETagWeak)(response);
+                await RESPONSE_ETAG_HEADER(eTag, isETagWeak)(response, ctx);
         };
 
-    public static Func<HttpResponseMessage, ValueTask> RESPONSE_BODY<T>(T body) =>
+
+    public static ResponseAssert RESPONSE_BODY<T>(T body) =>
         RESPONSE_BODY<T>(result => result.Should().BeEquivalentTo(body));
 
-    public static Func<HttpResponseMessage, ValueTask> RESPONSE_BODY<T>(Action<T> assert) =>
-        async response =>
+    public static ResponseAssert RESPONSE_BODY<T>(Func<TestContext, T> getBody) =>
+        RESPONSE_BODY<T>((result, ctx) => result.Should().BeEquivalentTo(getBody(ctx)));
+
+    public static ResponseAssert RESPONSE_BODY<T>(Action<T> assert) =>
+        RESPONSE_BODY<T>((body, _) => assert(body));
+
+    public static ResponseAssert RESPONSE_BODY<T>(Action<T, TestContext> assert) =>
+        async (response, ctx) =>
         {
             var result = await response.GetResultFromJson<T>();
-            assert(result);
+            assert(result, ctx);
 
             result.Should().BeEquivalentTo(result);
         };
@@ -209,14 +235,15 @@ public static class ApiSpecification
     public static Func<HttpResponseMessage, Task<T>> CREATED_ID<T>() =>
         response => Task.FromResult(response.GetCreatedId<T>());
 
-    public static Func<HttpResponseMessage, ValueTask<bool>> RESPONSE_ETAG_IS(object eTag, bool isWeak = true) =>
-        async response =>
+    public static Func<HttpResponseMessage, TestContext, ValueTask<bool>> RESPONSE_ETAG_IS(object eTag,
+        bool isWeak = true) =>
+        async (response, ctx) =>
         {
-            await RESPONSE_ETAG_HEADER(eTag, isWeak)(response);
+            await RESPONSE_ETAG_HEADER(eTag, isWeak)(response, ctx);
             return true;
         };
 
-    public static Func<HttpResponseMessage, ValueTask> RESPONSE_ETAG_HEADER(object eTag, bool isWeak = true) =>
+    public static ResponseAssert RESPONSE_ETAG_HEADER(object eTag, bool isWeak = true) =>
         RESPONSE_HEADERS(headers =>
         {
             headers.ETag.Should().NotBeNull("ETag response header should be defined").And
@@ -227,10 +254,10 @@ public static class ApiSpecification
             headers.ETag.Tag.Should().Be($"\"{eTag}\"");
         });
 
-    public static Func<HttpResponseMessage, ValueTask> RESPONSE_LOCATION_HEADER(string? locationHeaderPrefix = null) =>
-        async response =>
+    public static ResponseAssert RESPONSE_LOCATION_HEADER(string? locationHeaderPrefix = null) =>
+        async (response, ctx) =>
         {
-            await HTTP_STATUS(HttpStatusCode.Created)(response);
+            await HTTP_STATUS(HttpStatusCode.Created)(response, ctx);
 
             var locationHeader = response.Headers.Location;
 
@@ -241,8 +268,8 @@ public static class ApiSpecification
             location.Should().StartWith(locationHeaderPrefix ?? response.RequestMessage!.RequestUri!.AbsolutePath);
         };
 
-    public static Func<HttpResponseMessage, ValueTask> RESPONSE_HEADERS(params Action<HttpResponseHeaders>[] headers) =>
-        response =>
+    public static ResponseAssert RESPONSE_HEADERS(params Action<HttpResponseHeaders>[] headers) =>
+        (response, ctx) =>
         {
             foreach (var header in headers)
             {
@@ -270,7 +297,7 @@ public static class ApiSpecification
             return assert(result);
         };
 
-    public record Result(HttpResponseMessage Response, Func<HttpClient> CreateClient);
+    public record Result(HttpResponseMessage Response, TestContext TestContext, Func<HttpClient> CreateClient);
 }
 
 public class ApiSpecification<TProgram>: IDisposable where TProgram : class
@@ -293,7 +320,7 @@ public class ApiSpecification<TProgram>: IDisposable where TProgram : class
 
     public GivenApiSpecificationBuilder Given(
         params RequestTransform[][] builders) =>
-        new(createClient, builders);
+        new(new TestContext(), createClient, builders);
 
     public async Task<ApiSpecification.Result> Scenario(
         Task<ApiSpecification.Result> first,
@@ -336,62 +363,30 @@ public class GivenApiSpecificationBuilder
 {
     private readonly RequestTransform[][] given;
     private readonly Func<HttpClient> createClient;
+    private readonly TestContext testContext;
 
-    internal GivenApiSpecificationBuilder(Func<HttpClient> createClient, RequestTransform[][] given)
+    internal GivenApiSpecificationBuilder
+    (
+        TestContext testContext,
+        Func<HttpClient> createClient,
+        RequestTransform[][] given
+    )
     {
+        this.testContext = testContext;
         this.createClient = createClient;
         this.given = given;
     }
 
-    internal GivenApiSpecificationBuilder(Func<HttpClient> createClient): this(createClient,
-        Array.Empty<RequestTransform[]>())
+    internal GivenApiSpecificationBuilder
+    (
+        TestContext testContext,
+        Func<HttpClient> createClient
+    ): this(testContext, createClient, Array.Empty<RequestTransform[]>())
     {
     }
 
     public WhenApiSpecificationBuilder When(params RequestTransform[] when) =>
-        new(createClient, given, when);
-}
-
-public record RetryPolicy(
-    Func<HttpResponseMessage, ValueTask<bool>> Check,
-    int MaxNumberOfRetries = 5,
-    int RetryIntervalInMs = 1000
-)
-{
-    public async Task<HttpResponseMessage> Perform(Func<CancellationToken, Task<HttpResponseMessage>> send, CancellationToken ct)
-    {
-        var retryCount = MaxNumberOfRetries;
-        var finished = false;
-
-        HttpResponseMessage? response = null;
-        do
-        {
-            try
-            {
-                response = await send(ct);
-
-                finished = await Check(response);
-            }
-            catch
-            {
-                if (retryCount == 0)
-                    throw;
-            }
-
-            await Task.Delay(RetryIntervalInMs, ct);
-            retryCount--;
-        } while (!finished);
-
-        response.Should().NotBeNull();
-
-        return response!;
-    }
-
-    public static readonly RetryPolicy NoRetry = new RetryPolicy(
-        _ => ValueTask.FromResult(true),
-        0,
-        0
-    );
+        new(createClient, testContext, given, when);
 }
 
 public class WhenApiSpecificationBuilder
@@ -399,22 +394,25 @@ public class WhenApiSpecificationBuilder
     private readonly RequestTransform[][] given;
     private readonly RequestTransform[] when;
     private readonly Func<HttpClient> createClient;
+    private readonly TestContext testContext;
     private RetryPolicy retryPolicy;
 
     internal WhenApiSpecificationBuilder(
         Func<HttpClient> createClient,
+        TestContext testContext,
         RequestTransform[][] given,
         RequestTransform[] when
     )
     {
         this.createClient = createClient;
+        this.testContext = testContext;
         this.given = given;
         this.when = when;
         retryPolicy = RetryPolicy.NoRetry;
     }
 
     public WhenApiSpecificationBuilder Until(
-        Func<HttpResponseMessage, ValueTask<bool>> check,
+        Func<HttpResponseMessage, TestContext, ValueTask<bool>> check,
         int maxNumberOfRetries = 5,
         int retryIntervalInMs = 1000
     )
@@ -423,151 +421,75 @@ public class WhenApiSpecificationBuilder
         return this;
     }
 
-    public Task<ApiSpecification.Result> Then(Func<HttpResponseMessage, ValueTask> then) =>
+    public Task<ApiSpecification.Result> Then(ResponseAssert then) =>
         Then(new[] { then });
 
-    public Task<ApiSpecification.Result> Then(params Func<HttpResponseMessage, ValueTask>[] thens) =>
+    public Task<ApiSpecification.Result> Then(params ResponseAssert[] thens) =>
         Then(thens, default);
 
-    public async Task<ApiSpecification.Result> Then(IEnumerable<Func<HttpResponseMessage, ValueTask>> thens,
+    public async Task<ApiSpecification.Result> Then(IEnumerable<ResponseAssert> thens,
         CancellationToken ct)
     {
         using var client = createClient();
 
         // Given
         foreach (var givenBuilder in given)
-            await client.Send(givenBuilder, ct: ct);
+            await Send(client, givenBuilder, testContext, ct);
 
         // When
-        var response = await retryPolicy.Perform(t => client.Send(when, ct: t), ct);
+        var response = await retryPolicy
+            .Perform(t =>
+                    Send(client, when, testContext, ct), testContext, ct
+            );
 
         // Then
         foreach (var then in thens)
         {
-            await then(response);
+            await then(response, testContext);
         }
 
-        return new ApiSpecification.Result(response, createClient);
+        return new ApiSpecification.Result(response, testContext, createClient);
+    }
+
+    private static async Task<HttpResponseMessage> Send(
+        HttpClient client,
+        RequestTransform[] givenBuilder,
+        TestContext testContext,
+        CancellationToken ct
+    )
+    {
+        var request = TestApiRequest.For(testContext, givenBuilder);
+        var response = await client.SendAsync(request, ct);
+        testContext.Record(request, response);
+
+        return response;
     }
 }
 
-public class ApiRequest
+public class TestApiRequest
 {
     private readonly RequestTransform[] builders;
+    private readonly TestContext testContext;
 
-    public ApiRequest(params RequestTransform[] builders) =>
+    public TestApiRequest(TestContext testContext, params RequestTransform[] builders)
+    {
+        this.testContext = testContext;
         this.builders = builders;
+    }
 
     public HttpRequestMessage Build() =>
-        builders.Aggregate(new HttpRequestMessage(), (request, build) => build(request));
+        builders.Aggregate(new HttpRequestMessage(), (request, build) => build(request, testContext));
 
-    public static HttpRequestMessage For(params RequestTransform[] builders) =>
-        builders.Aggregate(new HttpRequestMessage(), (request, build) => build(request));
+    public static HttpRequestMessage For(TestContext testContext, params RequestTransform[] builders) =>
+        builders.Aggregate(new HttpRequestMessage(), (request, build) => build(request, testContext));
 }
 
 public static class ApiRequestExtensions
 {
     public static Task<HttpResponseMessage> Send(
         this HttpClient httpClient,
-        ApiRequest apiRequest,
+        TestApiRequest testApiRequest,
         CancellationToken ct = default
     ) =>
-        httpClient.SendAsync(apiRequest.Build(), ct);
-
-
-    public static Task<HttpResponseMessage> Send(
-        this HttpClient httpClient,
-        RequestTransform[] builders,
-        CancellationToken ct = default
-    ) =>
-        httpClient.SendAsync(ApiRequest.For(builders), ct);
-}
-
-public static class HttpResponseMessageExtensions
-{
-    public static bool TryGetCreatedId<T>(this HttpResponseMessage response, out T? value)
-    {
-        value = default;
-
-        var locationHeader = response.Headers.Location?.OriginalString.TrimEnd('/');
-
-        if (string.IsNullOrEmpty(locationHeader))
-            return false;
-
-        locationHeader = locationHeader.StartsWith("/") ? locationHeader : $"/{locationHeader}";
-
-        var start = locationHeader.LastIndexOf("/", locationHeader.Length - 1);
-
-        var createdId = locationHeader.Substring(start + 1, locationHeader.Length - 1 - start);
-
-        var result = TypeDescriptor.GetConverter(typeof(T)).ConvertFromInvariantString(createdId);
-
-        if (result == null)
-            return false;
-
-        value = (T?)result;
-
-        return true;
-    }
-
-    public static T GetCreatedId<T>(this HttpResponseMessage response) =>
-        response.TryGetCreatedId<T>(out var createdId)
-            ? createdId!
-            : throw new ArgumentOutOfRangeException(nameof(response.Headers.Location));
-
-    public static string GetCreatedId(this HttpResponseMessage response) =>
-        response.GetCreatedId<string>();
-
-    public static bool TryGetETagValue<T>(this HttpResponseMessage response, out T? value)
-    {
-        value = default;
-
-        var eTagHeader = response.Headers.ETag?.Tag;
-
-        if (string.IsNullOrEmpty(eTagHeader))
-            return false;
-
-        eTagHeader = eTagHeader.Substring(1, eTagHeader.Length - 2);
-
-        var result = TypeDescriptor.GetConverter(typeof(T)).ConvertFromInvariantString(eTagHeader);
-
-        if (result == null)
-            return false;
-
-        value = (T?)result;
-
-        return true;
-    }
-
-    public static T GetETagValue<T>(this HttpResponseMessage response) =>
-        response.TryGetCreatedId<T>(out var createdId)
-            ? createdId!
-            : throw new ArgumentOutOfRangeException(nameof(response.Headers.ETag));
-
-    public static string GetETagValue(this HttpResponseMessage response) =>
-        response.GetETagValue<string>();
-
-    public static Task<T> GetResultFromJson<T>(
-        this ApiSpecification.Result result,
-        JsonSerializerSettings? settings = null
-    ) =>
-        result.Response.GetResultFromJson<T>();
-
-
-    public static async Task<T> GetResultFromJson<T>(
-        this HttpResponseMessage response,
-        JsonSerializerSettings? settings = null
-    )
-    {
-        var result = await response.Content.ReadAsStringAsync();
-
-        result.Should().NotBeNull();
-        result.Should().NotBeEmpty();
-
-        var deserialised = result.FromJson<T>(settings);
-
-        deserialised.Should().NotBeNull();
-
-        return deserialised;
-    }
+        httpClient.SendAsync(testApiRequest.Build(), ct);
 }
