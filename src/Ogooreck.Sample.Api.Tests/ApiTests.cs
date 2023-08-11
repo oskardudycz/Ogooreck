@@ -13,8 +13,8 @@ public class Tests: IClassFixture<ApiSpecification<Program>>
 
     [Fact]
     public Task GetProducts() =>
-        API.Given(URI("/api/products"))
-            .When(GET)
+        API.Given()
+            .When(GET, URI("/api/products"))
             .Then(OK);
 
     #endregion ApiGetSample
@@ -25,10 +25,12 @@ public class Tests: IClassFixture<ApiSpecification<Program>>
     [Fact]
     public Task RegisterProduct() =>
         API.Given(
+            )
+            .When(
+                POST,
                 URI("/api/products"),
                 BODY(new RegisterProductRequest("abc-123", "Ogooreck"))
             )
-            .When(POST)
             .Then(CREATED, RESPONSE_LOCATION_HEADER());
 
     #endregion ApiPostSample
