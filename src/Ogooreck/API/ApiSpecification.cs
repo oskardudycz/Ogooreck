@@ -22,6 +22,9 @@ public static class ApiSpecification
     ///////////////////
     ////   WHEN    ////
     ///////////////////
+
+    public static RequestTransform[] SEND(params RequestTransform[] when) => when;
+
     public static RequestTransform URI(string uri) =>
         URI(new Uri(uri, UriKind.RelativeOrAbsolute));
 
@@ -80,61 +83,79 @@ public static class ApiSpecification
     public static Action<HttpRequestHeaders> IF_MATCH(object ifMatch, bool isWeak = true) =>
         IF_MATCH(ifMatch.ToString()!, isWeak);
 
-    public static Task<HttpResponseMessage> And(this Task<HttpResponseMessage> response,
+    public static Task<HttpResponseMessage> And(this Task<Result> result,
         Func<HttpResponseMessage, HttpResponseMessage> and) =>
-        response.ContinueWith(t => and(t.Result));
+        result.ContinueWith(t => and(t.Result.Response));
 
-    public static Task And(this Task<HttpResponseMessage> response, Func<HttpResponseMessage, Task> and) =>
-        response.ContinueWith(t => and(t.Result));
+    public static Task And(this Task<Result> result, Func<HttpResponseMessage, Task> and) =>
+        result.ContinueWith(t => and(t.Result.Response));
 
-    public static Task And<TResult>(this Task<HttpResponseMessage> response,
+    public static Task And<TResult>(this Task<Result> result,
         Func<HttpResponseMessage, Task<TResult>> and) =>
-        response.ContinueWith(t => and(t.Result));
+        result.ContinueWith(t => and(t.Result.Response));
 
-    public static Task And(this Task<HttpResponseMessage> response, Func<Task> and) =>
-        response.ContinueWith(_ => and());
+    public static Task And(this Task<Result> result, Func<Task> and) =>
+        result.ContinueWith(_ => and());
 
-    public static Task And(this Task<HttpResponseMessage> response, Task and) =>
-        response.ContinueWith(_ => and);
+    public static Task And(this Task<Result> result, Task and) =>
+        result.ContinueWith(_ => and);
+
+    public static Task<GivenApiSpecificationBuilder> And(this Task<Result> result) =>
+        result.ContinueWith(_ => new GivenApiSpecificationBuilder(result.Result.CreateClient));
+
+    public static Task<WhenApiSpecificationBuilder> AndWhen(this Task<Result> result, params RequestTransform[] when) =>
+        result.And().When(when);
+
+    public static Task<WhenApiSpecificationBuilder> AndWhen(
+        this Task<Result> result,
+        Func<HttpResponseMessage, RequestTransform[]> when
+    ) =>
+        result.ContinueWith(r =>
+            new GivenApiSpecificationBuilder(r.Result.CreateClient).When(when(r.Result.Response))
+        );
+
+    public static Task<WhenApiSpecificationBuilder> When(
+        this Task<GivenApiSpecificationBuilder> result,
+        params RequestTransform[] when
+    ) =>
+        result.ContinueWith(_ => result.Result.When(when));
+
+    public static Task<WhenApiSpecificationBuilder> Until(
+        this Task<WhenApiSpecificationBuilder> when,
+        Func<HttpResponseMessage, ValueTask<bool>> check,
+        int maxNumberOfRetries = 5,
+        int retryIntervalInMs = 1000
+    ) =>
+        when.ContinueWith(t => t.Result.Until(check, maxNumberOfRetries, retryIntervalInMs));
+
+    public static Task<Result> Then(
+        this Task<WhenApiSpecificationBuilder> when,
+        Func<HttpResponseMessage, ValueTask> then
+    ) =>
+        when.ContinueWith(t => t.Result.Then(then)).Unwrap();
+
+    public static Task<Result> Then(
+        this Task<WhenApiSpecificationBuilder> when,
+        params Func<HttpResponseMessage, ValueTask>[] thens
+    ) =>
+        when.ContinueWith(t => t.Result.Then(thens)).Unwrap();
+
+    public static Task<Result> Then(
+        this Task<WhenApiSpecificationBuilder> when,
+        IEnumerable<Func<HttpResponseMessage, ValueTask>> thens,
+        CancellationToken ct
+    ) =>
+        when.ContinueWith(t => t.Result.Then(thens, ct), ct).Unwrap();
 
 
-    // public static Func<HttpClient, Func<HttpRequestMessage>, Task<HttpResponseMessage>> GET_UNTIL(
-    //     Func<HttpResponseMessage, ValueTask<bool>> check) =>
-    //     SEND_UNTIL(HttpMethod.Get, check);
-    //
-    // public static Func<HttpClient, Func<HttpRequestMessage>, Task<HttpResponseMessage>> SEND_UNTIL(HttpMethod httpMethod,
-    //     Func<HttpResponseMessage, ValueTask<bool>> check, int maxNumberOfRetries = 5, int retryIntervalInMs = 1000) =>
-    //     async (api, buildRequest) =>
-    //     {
-    //         var retryCount = maxNumberOfRetries;
-    //         var finished = false;
-    //
-    //         HttpResponseMessage? response = null;
-    //         do
-    //         {
-    //             try
-    //             {
-    //                 var request = buildRequest();
-    //                 request.Method = httpMethod;
-    //
-    //                 response = await api.SendAsync(request);
-    //
-    //                 finished = await check(response);
-    //             }
-    //             catch
-    //             {
-    //                 if (retryCount == 0)
-    //                     throw;
-    //             }
-    //
-    //             await Task.Delay(retryIntervalInMs);
-    //             retryCount--;
-    //         } while (!finished);
-    //
-    //         response.Should().NotBeNull();
-    //
-    //         return response!;
-    //     };
+    public static Task<T> GetResponseBody<T>(this Task<Result> result) => result.Map(RESPONSE_BODY<T>());
+    public static Task<T> GetCreatedId<T>(this Task<Result> result) => result.Map(CREATED_ID<T>());
+
+    public static Task<T> Map<T>(
+        this Task<Result> result,
+        Func<HttpResponseMessage, Task<T>> map
+    ) =>
+        result.ContinueWith(t => map(t.Result.Response)).Unwrap();
 
     ///////////////////
     ////   THEN    ////
@@ -181,6 +202,12 @@ public static class ApiSpecification
 
             result.Should().BeEquivalentTo(result);
         };
+
+    public static Func<HttpResponseMessage, Task<T>> RESPONSE_BODY<T>() =>
+        response => response.GetResultFromJson<T>();
+
+    public static Func<HttpResponseMessage, Task<T>> CREATED_ID<T>() =>
+        response => Task.FromResult(response.GetCreatedId<T>());
 
     public static Func<HttpResponseMessage, ValueTask<bool>> RESPONSE_ETAG_IS(object eTag, bool isWeak = true) =>
         async response =>
@@ -242,6 +269,8 @@ public static class ApiSpecification
 
             return assert(result);
         };
+
+    public record Result(HttpResponseMessage Response, Func<HttpClient> CreateClient);
 }
 
 public class ApiSpecification<TProgram>: IDisposable where TProgram : class
@@ -266,18 +295,18 @@ public class ApiSpecification<TProgram>: IDisposable where TProgram : class
         params RequestTransform[][] builders) =>
         new(createClient, builders);
 
-    public async Task<HttpResponseMessage> Scenario(
-        Task<HttpResponseMessage> first,
-        params Func<HttpResponseMessage, Task<HttpResponseMessage>>[] following)
+    public async Task<ApiSpecification.Result> Scenario(
+        Task<ApiSpecification.Result> first,
+        params Func<HttpResponseMessage, Task<ApiSpecification.Result>>[] following)
     {
-        var response = await first;
+        var result = await first;
 
         foreach (var next in following)
         {
-            response = await next(response);
+            result = await next(result.Response);
         }
 
-        return response;
+        return result;
     }
 
     public async Task<HttpResponseMessage> Scenario(
@@ -298,79 +327,128 @@ public class ApiSpecification<TProgram>: IDisposable where TProgram : class
     ////   BUILDER   ////
     /////////////////////
 
-    public class GivenApiSpecificationBuilder
-    {
-        private readonly RequestTransform[][] given;
-        private readonly Func<HttpClient> createClient;
 
-        internal GivenApiSpecificationBuilder(Func<HttpClient> createClient, RequestTransform[][] given)
-        {
-            this.createClient = createClient;
-            this.given = given;
-        }
-
-        public WhenApiSpecificationBuilder When(params RequestTransform[] when) =>
-            new(createClient, given, when);
-    }
-
-    public class WhenApiSpecificationBuilder
-    {
-        private readonly RequestTransform[][] given;
-        private readonly RequestTransform[] when;
-        private readonly Func<HttpClient> createClient;
-
-        internal WhenApiSpecificationBuilder(
-            Func<HttpClient> createClient,
-            RequestTransform[][] given,
-            RequestTransform[] when
-        )
-        {
-            this.createClient = createClient;
-            this.given = given;
-            this.when = when;
-        }
-
-        public Task<HttpResponseMessage> Then(Func<HttpResponseMessage, ValueTask> then) =>
-            Then(new[] { then });
-
-        public Task<HttpResponseMessage> Then(params Func<HttpResponseMessage, ValueTask>[] thens) =>
-            Then(thens, default);
-
-        public async Task<HttpResponseMessage> Then(IEnumerable<Func<HttpResponseMessage, ValueTask>> thens, CancellationToken ct)
-        {
-            using var client = createClient();
-
-            // Given
-            foreach (var givenBuilder in given)
-                await client.Send(givenBuilder, ct: ct);
-
-            // When
-            var response = await client.Send(when, ct: ct);
-
-            // Then
-            foreach (var then in thens)
-            {
-                await then(response);
-            }
-
-            return response;
-        }
-    }
-
-    public void Dispose()
-    {
+    public void Dispose() =>
         applicationFactory.Dispose();
-    }
 }
 
-public class AndSpecificationBuilder
+public class GivenApiSpecificationBuilder
 {
-    private readonly Lazy<Task<HttpResponseMessage>> then;
+    private readonly RequestTransform[][] given;
+    private readonly Func<HttpClient> createClient;
 
-    public AndSpecificationBuilder(Lazy<Task<HttpResponseMessage>> then) =>
-        this.then = then;
+    internal GivenApiSpecificationBuilder(Func<HttpClient> createClient, RequestTransform[][] given)
+    {
+        this.createClient = createClient;
+        this.given = given;
+    }
 
-    public Task<HttpResponseMessage> Response => then.Value;
+    internal GivenApiSpecificationBuilder(Func<HttpClient> createClient): this(createClient,
+        Array.Empty<RequestTransform[]>())
+    {
+    }
+
+    public WhenApiSpecificationBuilder When(params RequestTransform[] when) =>
+        new(createClient, given, when);
+}
+
+public record RetryPolicy(
+    Func<HttpResponseMessage, ValueTask<bool>> Check,
+    int MaxNumberOfRetries = 5,
+    int RetryIntervalInMs = 1000
+)
+{
+    public async Task<HttpResponseMessage> Perform(Func<CancellationToken, Task<HttpResponseMessage>> send, CancellationToken ct)
+    {
+        var retryCount = MaxNumberOfRetries;
+        var finished = false;
+
+        HttpResponseMessage? response = null;
+        do
+        {
+            try
+            {
+                response = await send(ct);
+
+                finished = await Check(response);
+            }
+            catch
+            {
+                if (retryCount == 0)
+                    throw;
+            }
+
+            await Task.Delay(RetryIntervalInMs, ct);
+            retryCount--;
+        } while (!finished);
+
+        response.Should().NotBeNull();
+
+        return response!;
+    }
+
+    public static readonly RetryPolicy NoRetry = new RetryPolicy(
+        _ => ValueTask.FromResult(true),
+        0,
+        0
+    );
+}
+
+public class WhenApiSpecificationBuilder
+{
+    private readonly RequestTransform[][] given;
+    private readonly RequestTransform[] when;
+    private readonly Func<HttpClient> createClient;
+    private RetryPolicy retryPolicy;
+
+    internal WhenApiSpecificationBuilder(
+        Func<HttpClient> createClient,
+        RequestTransform[][] given,
+        RequestTransform[] when
+    )
+    {
+        this.createClient = createClient;
+        this.given = given;
+        this.when = when;
+        retryPolicy = RetryPolicy.NoRetry;
+    }
+
+    public WhenApiSpecificationBuilder Until(
+        Func<HttpResponseMessage, ValueTask<bool>> check,
+        int maxNumberOfRetries = 5,
+        int retryIntervalInMs = 1000
+    )
+    {
+        retryPolicy = new RetryPolicy(check, maxNumberOfRetries, retryIntervalInMs);
+        return this;
+    }
+
+    public Task<ApiSpecification.Result> Then(Func<HttpResponseMessage, ValueTask> then) =>
+        Then(new[] { then });
+
+    public Task<ApiSpecification.Result> Then(params Func<HttpResponseMessage, ValueTask>[] thens) =>
+        Then(thens, default);
+
+    public async Task<ApiSpecification.Result> Then(IEnumerable<Func<HttpResponseMessage, ValueTask>> thens,
+        CancellationToken ct)
+    {
+        using var client = createClient();
+
+        // Given
+        foreach (var givenBuilder in given)
+            await client.Send(givenBuilder, ct: ct);
+
+        // When
+        var response = await retryPolicy.Perform(t => client.Send(when, ct: t), ct);
+
+        // Then
+        foreach (var then in thens)
+        {
+            await then(response);
+        }
+
+        return new ApiSpecification.Result(response, createClient);
+    }
 }
 
 public class ApiRequest
@@ -469,8 +547,17 @@ public static class HttpResponseMessageExtensions
     public static string GetETagValue(this HttpResponseMessage response) =>
         response.GetETagValue<string>();
 
-    public static async Task<T> GetResultFromJson<T>(this HttpResponseMessage response,
-        JsonSerializerSettings? settings = null)
+    public static Task<T> GetResultFromJson<T>(
+        this ApiSpecification.Result result,
+        JsonSerializerSettings? settings = null
+    ) =>
+        result.Response.GetResultFromJson<T>();
+
+
+    public static async Task<T> GetResultFromJson<T>(
+        this HttpResponseMessage response,
+        JsonSerializerSettings? settings = null
+    )
     {
         var result = await response.Content.ReadAsStringAsync();
 
