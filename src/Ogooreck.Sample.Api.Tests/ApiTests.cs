@@ -24,8 +24,7 @@ public class Tests: IClassFixture<ApiSpecification<Program>>
 
     [Fact]
     public Task RegisterProduct() =>
-        API.Given(
-            )
+        API.Given()
             .When(
                 POST,
                 URI("/api/products"),
