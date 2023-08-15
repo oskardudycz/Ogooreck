@@ -599,11 +599,12 @@ Ogooreck provides a set of helpers to construct the request (e.g. `URI`, `BODY`)
 
 ```csharp
 public Task POST_CreatesNewMeeting() =>
-    API.Given(
+    API.Given()
+        .When(
+            POST
             URI("/api/meetings/),
             BODY(new CreateMeeting(Guid.NewGuid(), "Event Sourcing Workshop"))
         )
-        .When(POST)
         .Then(CREATED);
 ```
 
@@ -613,11 +614,12 @@ You can also specify headers, e.g. `IF_MATCH` to perform an optimistic concurren
 
 ```csharp
 public Task PUT_ConfirmsShoppingCart() =>
-    API.Given(
+    API.Given()
+        .When(
+            PUT,
             URI($"/api/ShoppingCarts/{API.ShoppingCartId}/confirmation"),
             HEADERS(IF_MATCH(1))
         )
-        .When(PUT)
         .Then(OK);
 ```
 
@@ -627,10 +629,8 @@ You can also do response body assertions, to, e.g. out of the box check if the r
 
 ```csharp
 public Task GET_ReturnsShoppingCartDetails() =>
-    API.Given(
-            URI($"/api/ShoppingCarts/{API.ShoppingCartId}")
-        )
-        .When(GET)
+    API.Given()
+        .When(GET, URI($"/api/ShoppingCarts/{API.ShoppingCartId}"))
         .Then(
             OK,
             RESPONSE_BODY(new ShoppingCartDetails
