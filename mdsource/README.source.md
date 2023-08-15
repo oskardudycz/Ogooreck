@@ -649,10 +649,9 @@ You can use various conditions, e.g. `RESPONSE_SUCCEEDED` waits until a response
 
 ```csharp
 public Task GET_ReturnsShoppingCartDetails() =>
-    API.Given(
-            URI($"/api/ShoppingCarts/{API.ShoppingCartId}")
-        )
-        .When(GET_UNTIL(RESPONSE_SUCCEEDED))
+    API.Given()
+        .When(GET, URI($"/api/ShoppingCarts/{API.ShoppingCartId}"))
+        .Until(RESPONSE_SUCCEEDED)
         .Then(
             OK,
             RESPONSE_BODY(new ShoppingCartDetails
@@ -669,10 +668,9 @@ You can also use `RESPONSE_ETAG_IS` helper to check if ETag matches your expecte
 
 ```csharp
 public Task GET_ReturnsShoppingCartDetails() =>
-    API.Given(
-            URI($"/api/ShoppingCarts/{API.ShoppingCartId}")
-        )
-        .When(GET_UNTIL(RESPONSE_ETAG_IS(2)))
+    API.Given()
+        .When(GET, URI($"/api/ShoppingCarts/{API.ShoppingCartId}"))
+        .Until(RESPONSE_ETAG_IS(2))
         .Then(
             OK,
             RESPONSE_BODY(new ShoppingCartDetails
@@ -691,14 +689,15 @@ You can also do custom checks on the body, providing expression.
 
 ```csharp
 public Task GET_ReturnsShoppingCartDetails() =>
-    API.Given(
+    API.Given()
+        .When(
+            GET,
             URI($"{MeetingsSearchApi.MeetingsUrl}?filter={MeetingName}")
         )
-        .When(
-            GET_UNTIL(
-                RESPONSE_BODY_MATCHES<IReadOnlyCollection<Meeting>>(
-                    meetings => meetings.Any(m => m.Id == MeetingId))
-            ))
+        .UNTIL(
+            RESPONSE_BODY_MATCHES<IReadOnlyCollection<Meeting>>(
+                meetings => meetings.Any(m => m.Id == MeetingId))
+        )
         .Then(
             RESPONSE_BODY<IReadOnlyCollection<Meeting>>(meetings =>
                 meetings.Should().Contain(meeting =>
@@ -714,13 +713,45 @@ Of course, the delete keyword is also supported.
 
 ```csharp
 public Task DELETE_ShouldRemoveProductFromShoppingCart() =>
-    API.Given(
-            URI(
-                $"/api/ShoppingCarts/{API.ShoppingCartId}/products/{API.ProductItem.ProductId}?quantity={RemovedCount}&unitPrice={API.UnitPrice}"),
+    API.Given()
+        .When(
+            DELETE, 
+            URI($"/api/ShoppingCarts/{API.ShoppingCartId}/products/{API.ProductItem.ProductId}?quantity={RemovedCount}&unitPrice={API.UnitPrice}"),
             HEADERS(IF_MATCH(1))
         )
-        .When(DELETE)
         .Then(NO_CONTENT);
+```
+
+### Using data from results of the previous tests
+
+For instance created id to shape proper URI.
+
+```csharp
+public class CancelShoppingCartTests: IClassFixture<ApiSpecification<Program>>
+{
+    private readonly ApiSpecification<Program> API;
+    public CancelShoppingCartTests(ApiSpecification<Program> api) => API = api;
+
+    public readonly Guid ClientId = Guid.NewGuid();
+
+    [Fact]
+    [Trait("Category", "Acceptance")]
+    public Task Delete_Should_Return_OK_And_Cancel_Shopping_Cart() =>
+        API
+            .Given(
+                "Opened ShoppingCart",
+                POST,
+                URI("/api/ShoppingCarts"),
+                BODY(new OpenShoppingCartRequest(clientId: Guid.NewGuid()))
+            )
+            .When(
+                "Cancel Shopping Cart",
+                DELETE,
+                URI(ctx => $"/api/ShoppingCarts/{ctx.GetCreatedId()}"),
+                HEADERS(IF_MATCH(0))
+            )
+            .Then(OK);
+}
 ```
 
 ### Scenarios and advanced composition
@@ -736,19 +767,21 @@ public async Task POST_WithExistingSKU_ReturnsConflictStatus() =>
     var request = new RegisterProductRequest("AA2039485", ValidName, ValidDescription);
 
     // first one should succeed
-    await API.Given(
+    await API.Given()
+        .When(
+            POST,
             URI("/api/products/"),
             BODY(request)
         )
-        .When(POST)
         .Then(CREATED);
 
     // second one will fail with conflict
-    await API.Given(
+    await API.Given()
+        .When(
+            POST,
             URI("/api/products/"),
             BODY(request)
         )
-        .When(POST)
         .Then(CONFLICT);
 }
 ```
@@ -756,23 +789,27 @@ public async Task POST_WithExistingSKU_ReturnsConflictStatus() =>
 **Joining with `And`**
 
 ```csharp
-public Task SendPackage_ShouldReturn_CreatedStatus_With_PackageId() =>
-        API.Given(
-                URI("/api/Shipments/"),
-                BODY(new SendPackage(OrderId, ProductItems))
-            )
-            .When(POST)
-            .Then(CREATED)
-            .And(response => fixture.ShouldPublishInternalEventOfType<PackageWasSent>(
-                @event =>
-                    @event.PackageId == response.GetCreatedId<Guid>()
-                    && @event.OrderId == OrderId
-                    && @event.SentAt > TimeBeforeSending
-                    && @event.ProductItems.Count == ProductItems.Count
-                    && @event.ProductItems.All(
-                        pi => ProductItems.Exists(
-                            expi => expi.ProductId == pi.ProductId && expi.Quantity == pi.Quantity))
-            ));
+public async Task POST_WithExistingSKU_ReturnsConflictStatus() =>
+{
+    // Given
+    var request = new RegisterProductRequest("AA2039485", ValidName, ValidDescription);
+
+    // first one should succeed
+    await API.Given()
+        .When(
+            POST,
+            URI("/api/products/"),
+            BODY(request)
+        )
+        .Then(CREATED)
+        .And()
+        .When(
+            POST,
+            URI("/api/products/"),
+            BODY(request)
+        )
+        .Then(CONFLICT);
+}
 ```
 
 **Chained Api Scenario**
@@ -784,11 +821,12 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
 
     await API.Scenario(
         // Create Reservations
-        API.Given(
+        API.Given()
+            .When(
+                POST,        
                 URI("/api/Reservations/"),
                 BODY(new CreateTentativeReservationRequest { SeatId = SeatId })
             )
-            .When(POST)
             .Then(CREATED,
                 response =>
                 {
@@ -797,10 +835,11 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
                 }),
 
         // Get reservation details
-        _ => API.Given(
+        _ => API.Given()
+            .When(
+                GET
                 URI($"/api/Reservations/{createdReservationId}")
             )
-            .When(GET)
             .Then(
                 OK,
                 RESPONSE_BODY<ReservationDetails>(reservation =>
@@ -813,10 +852,8 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
                 })),
 
         // Get reservations list
-        _ => API.Given(
-                URI("/api/Reservations/")
-            )
-            .When(GET)
+        _ => API.Given()
+            .When(GET, URI("/api/Reservations/"))
             .Then(
                 OK,
                 RESPONSE_BODY<PagedListResponse<ReservationShortInfo>>(reservations =>
@@ -836,10 +873,8 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
                 })),
 
         // Get reservation history
-        _ => API.Given(
-                URI($"/api/Reservations/{createdReservationId}/history")
-            )
-            .When(GET)
+        _ => API.Given()
+            .When(GET, URI($"/api/Reservations/{createdReservationId}/history"))
             .Then(
                 OK,
                 RESPONSE_BODY<PagedListResponse<ReservationHistory>>(reservations =>
@@ -875,11 +910,12 @@ public class CreateMeetingTests: IClassFixture<ApiSpecification<Program>>
 
     [Fact]
     public Task CreateCommand_ShouldPublish_MeetingCreateEvent() =>
-        API.Given(
+        API.Given()
+            .When(
+                POST, 
                 URI("/api/meetings/),
                 BODY(new CreateMeeting(Guid.NewGuid(), "Event Sourcing Workshop"))
             )
-            .When(POST)
             .Then(CREATED);
 }
 ```
@@ -890,42 +926,52 @@ public class CreateMeetingTests: IClassFixture<ApiSpecification<Program>>
 Sometimes you need to set up test data asynchronously (e.g. open a shopping cart before cancelling it). You might not want to pollute your tests code with test case setup or do more extended preparation. For that XUnit provides `IAsyncLifetime` interface. You can create a fixture derived from the `APISpecification` to benefit from built-in helpers and use it later in your tests.
 
 ```csharp
-public class CancelShoppingCartFixture: ApiSpecification<Program>, IAsyncLifetime
+public class GetProductDetailsFixture: ApiSpecification<Program>, IAsyncLifetime
 {
-    public Guid ShoppingCartId { get; private set; }
+    public ProductDetails ExistingProduct = default!;
+
+    public GetProductDetailsFixture(): base(new WarehouseTestWebApplicationFactory()) { }
 
     public async Task InitializeAsync()
     {
-        var openResponse = await Send(
-            new ApiRequest(POST, URI("/api/ShoppingCarts"), BODY(new OpenShoppingCartRequest(Guid.NewGuid())))
-        );
+        var registerProduct = new RegisterProductRequest("IN11111", "ValidName", "ValidDescription");
+        var productId = await Given()
+            .When(POST, URI("/api/products"), BODY(registerProduct))
+            .Then(CREATED)
+            .GetCreatedId<Guid>();
 
-        await CREATED(openResponse);
-
-        ShoppingCartId = openResponse.GetCreatedId<Guid>();
+        var (sku, name, description) = registerProduct;
+        ExistingProduct = new ProductDetails(productId, sku!, name!, description);
     }
 
-    public Task DisposeAsync()
-    {
-        Dispose();
-        return Task.CompletedTask;
-    }
+    public Task DisposeAsync() => Task.CompletedTask;
 }
 
-public class CancelShoppingCartTests: IClassFixture<CancelShoppingCartFixture>
+public class GetProductDetailsTests: IClassFixture<GetProductDetailsFixture>
 {
-    private readonly CancelShoppingCartFixture API;
+    private readonly GetProductDetailsFixture API;
 
-    public CancelShoppingCartTests(CancelShoppingCartFixture api) => API = api;
+    public GetProductDetailsTests(GetProductDetailsFixture api) => API = api;
 
     [Fact]
-    public async Task Delete_Should_Return_OK_And_Cancel_Shopping_Cart() => 
-        API.Given(
-                URI($"/api/ShoppingCarts/{API.ShoppingCartId}"),
-                HEADERS(IF_MATCH(1))
-            )
-            .When(DELETE)
-            .Then(OK);
+    public Task ValidRequest_With_NoParams_ShouldReturn_200() =>
+        API.Given()
+            .When(GET, URI($"/api/products/{API.ExistingProduct.Id}"))
+            .Then(OK, RESPONSE_BODY(API.ExistingProduct));
+
+    [Theory]
+    [InlineData(12)]
+    [InlineData("not-a-guid")]
+    public Task InvalidGuidId_ShouldReturn_404(object invalidId) =>
+        API.Given()
+            .When(GET, URI($"/api/products/{invalidId}"))
+            .Then(NOT_FOUND);
+
+    [Fact]
+    public Task NotExistingId_ShouldReturn_404() =>
+        API.Given()
+            .When(GET, URI($"/api/products/{Guid.NewGuid()}"))
+            .Then(NOT_FOUND);
 }
 ```
 
