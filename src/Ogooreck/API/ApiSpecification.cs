@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Ogooreck.API;
 
-public record RequestDefinition(RequestTransform[] Transformations);
+public record RequestDefinition(RequestTransform[] Transformations, string Description = "");
 
 public delegate HttpRequestMessage RequestTransform(HttpRequestMessage request, TestContext context);
 
@@ -33,7 +33,7 @@ public class ApiSpecification<TProgram>: IDisposable where TProgram : class
         new(applicationFactory);
 
     public GivenApiSpecificationBuilder Given(
-        params RequestTransform[][] builders) =>
+        params RequestDefinition[] builders) =>
         new(new TestContext(), createClient, builders);
 
     public async Task<ApiSpecification.Result> Scenario(
