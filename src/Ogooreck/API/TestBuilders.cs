@@ -6,7 +6,7 @@ namespace Ogooreck.API;
 
 public class GivenApiSpecificationBuilder
 {
-    private readonly RequestTransform[][] given;
+    private readonly RequestDefinition[] given;
     private readonly Func<HttpClient> createClient;
     private readonly TestContext testContext;
 
@@ -14,7 +14,7 @@ public class GivenApiSpecificationBuilder
     (
         TestContext testContext,
         Func<HttpClient> createClient,
-        RequestTransform[][] given
+        RequestDefinition[] given
     )
     {
         this.testContext = testContext;
@@ -26,18 +26,18 @@ public class GivenApiSpecificationBuilder
     (
         TestContext testContext,
         Func<HttpClient> createClient
-    ): this(testContext, createClient, Array.Empty<RequestTransform[]>())
+    ): this(testContext, createClient, Array.Empty<RequestDefinition>())
     {
     }
 
     public WhenApiSpecificationBuilder When(params RequestTransform[] when) =>
-        new(createClient, testContext, given, when);
+        new(createClient, testContext, given, new RequestDefinition(when));
 }
 
 public class WhenApiSpecificationBuilder
 {
-    private readonly RequestTransform[][] given;
-    private readonly RequestTransform[] when;
+    private readonly RequestDefinition[] given;
+    private readonly RequestDefinition when;
     private readonly Func<HttpClient> createClient;
     private readonly TestContext testContext;
     private RetryPolicy retryPolicy;
@@ -45,8 +45,8 @@ public class WhenApiSpecificationBuilder
     internal WhenApiSpecificationBuilder(
         Func<HttpClient> createClient,
         TestContext testContext,
-        RequestTransform[][] given,
-        RequestTransform[] when
+        RequestDefinition[] given,
+        RequestDefinition when
     )
     {
         this.createClient = createClient;
@@ -97,14 +97,14 @@ public class WhenApiSpecificationBuilder
         HttpClient client,
         RetryPolicy retryPolicy,
         TestPhase testPhase,
-        RequestTransform[] requestBuilder,
+        RequestDefinition requestBuilder,
         TestContext testContext,
         CancellationToken ct
     ) =>
         retryPolicy
             .Perform(async t =>
             {
-                var request = TestApiRequest.For(testContext, requestBuilder);
+                var request = TestApiRequest.For(testContext, requestBuilder.Transformations);
                 var response = await client.SendAsync(request, t);
 
                 testContext.Record(testPhase, request, response);
