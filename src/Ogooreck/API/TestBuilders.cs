@@ -1,3 +1,5 @@
+using System.Net;
+
 namespace Ogooreck.API;
 
 #pragma warning disable CS1591
@@ -77,13 +79,10 @@ public class WhenApiSpecificationBuilder
 
         // Given
         foreach (var givenBuilder in given)
-            await Send(client, givenBuilder, testContext, ct);
+            await Send(client, RetryPolicy.NoRetry, TestPhase.Given, givenBuilder, testContext, ct);
 
         // When
-        var response = await retryPolicy
-            .Perform(t =>
-                    Send(client, when, testContext, ct), testContext, ct
-            );
+        var response = await Send(client, retryPolicy, TestPhase.When, when, testContext, ct);
 
         // Then
         foreach (var then in thens)
@@ -94,30 +93,42 @@ public class WhenApiSpecificationBuilder
         return new ApiSpecification.Result(response, testContext, createClient);
     }
 
-    private static async Task<HttpResponseMessage> Send(
+    private static Task<HttpResponseMessage> Send(
         HttpClient client,
-        RequestTransform[] givenBuilder,
+        RetryPolicy retryPolicy,
+        TestPhase testPhase,
+        RequestTransform[] requestBuilder,
         TestContext testContext,
         CancellationToken ct
-    )
-    {
-        var request = TestApiRequest.For(testContext, givenBuilder);
-        var response = await client.SendAsync(request, ct);
-        testContext.Record(request, response);
+    ) =>
+        retryPolicy
+            .Perform(async t =>
+            {
+                var request = TestApiRequest.For(testContext, requestBuilder);
+                var response = await client.SendAsync(request, t);
 
-        return response;
-    }
+                testContext.Record(testPhase, request, response);
+
+                return response;
+            }, testContext, ct);
 }
 
-public record MadeApiCall(HttpRequestMessage Request, HttpResponseMessage Response);
+public enum TestPhase
+{
+    Given,
+    When,
+    Then
+}
+
+public record MadeApiCall(TestPhase TestPhase, HttpRequestMessage Request, HttpResponseMessage Response, string Description = "");
 
 public class TestContext
 {
     public List<MadeApiCall> Calls { get; } = new();
 
-    public void Record(HttpRequestMessage request, HttpResponseMessage response) =>
-        Calls.Add(new MadeApiCall(request, response));
+    public void Record(TestPhase testPhase, HttpRequestMessage request, HttpResponseMessage response) =>
+        Calls.Add(new MadeApiCall(testPhase, request, response));
 
     public T GetCreatedId<T>() where T : notnull =>
-        Calls.First().Response.GetCreatedId<T>();
+        Calls.First(c => c.Response.StatusCode == HttpStatusCode.Created).Response.GetCreatedId<T>();
 }
