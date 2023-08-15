@@ -19,7 +19,7 @@ public static class HttpResponseMessageExtensions
 
         locationHeader = locationHeader.StartsWith("/") ? locationHeader : $"/{locationHeader}";
 
-        var start = locationHeader.LastIndexOf("/", locationHeader.Length - 1);
+        var start = locationHeader.LastIndexOf("/", locationHeader.Length - 1, StringComparison.Ordinal);
 
         var createdId = locationHeader.Substring(start + 1, locationHeader.Length - 1 - start);
 
