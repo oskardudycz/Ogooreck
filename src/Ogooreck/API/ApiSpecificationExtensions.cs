@@ -16,7 +16,10 @@ public static class ApiSpecification
     ////   WHEN    ////
     ///////////////////
 
-    public static RequestTransform[] SEND(params RequestTransform[] when) => when;
+    public static RequestDefinition SEND(params RequestTransform[] when) => new(when);
+
+
+    public static RequestDefinition SEND(string description, params RequestTransform[] when) => new(when, description);
 
     public static RequestTransform URI(Func<TestContext, string> getUrl) =>
         URI(ctx => new Uri(getUrl(ctx), UriKind.RelativeOrAbsolute));

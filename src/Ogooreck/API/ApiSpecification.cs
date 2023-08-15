@@ -1,14 +1,8 @@
-﻿using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using FluentAssertions;
-using Microsoft.AspNetCore.Mvc.Testing;
+﻿using Microsoft.AspNetCore.Mvc.Testing;
 
 #pragma warning disable CS1591
 
 namespace Ogooreck.API;
-
-public record RequestDefinition(RequestTransform[] Transformations, string Description = "");
 
 public delegate HttpRequestMessage RequestTransform(HttpRequestMessage request, TestContext context);
 
@@ -33,7 +27,19 @@ public class ApiSpecification<TProgram>: IDisposable where TProgram : class
         new(applicationFactory);
 
     public GivenApiSpecificationBuilder Given(
-        params RequestDefinition[] builders) =>
+        params RequestDefinition[] builders
+    ) =>
+        Given(builders.Select(b => new ApiTestStep(TestPhase.Given, b)).ToArray());
+
+
+    public GivenApiSpecificationBuilder Given(
+        string description,
+        params RequestDefinition[] builders
+    ) =>
+        Given(builders.Select(b => new ApiTestStep(TestPhase.Given, b, description)).ToArray());
+
+    public GivenApiSpecificationBuilder Given(
+        ApiTestStep[] builders) =>
         new(new TestContext(), createClient, builders);
 
     public async Task<ApiSpecification.Result> Scenario(
@@ -82,8 +88,9 @@ public class TestApiRequest
     public HttpRequestMessage Build() =>
         builders.Aggregate(new HttpRequestMessage(), (request, build) => build(request, testContext));
 
-    public static HttpRequestMessage For(TestContext testContext, params RequestTransform[] builders) =>
-        builders.Aggregate(new HttpRequestMessage(), (request, build) => build(request, testContext));
+    public static HttpRequestMessage For(TestContext testContext, RequestDefinition requestDefinition) =>
+        requestDefinition.Transformations
+            .Aggregate(new HttpRequestMessage(), (request, build) => build(request, testContext));
 }
 
 public static class ApiRequestExtensions

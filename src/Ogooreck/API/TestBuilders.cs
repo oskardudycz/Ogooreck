@@ -6,7 +6,7 @@ namespace Ogooreck.API;
 
 public class GivenApiSpecificationBuilder
 {
-    private readonly RequestDefinition[] given;
+    private readonly ApiTestStep[] given;
     private readonly Func<HttpClient> createClient;
     private readonly TestContext testContext;
 
@@ -14,7 +14,7 @@ public class GivenApiSpecificationBuilder
     (
         TestContext testContext,
         Func<HttpClient> createClient,
-        RequestDefinition[] given
+        ApiTestStep[] given
     )
     {
         this.testContext = testContext;
@@ -26,18 +26,31 @@ public class GivenApiSpecificationBuilder
     (
         TestContext testContext,
         Func<HttpClient> createClient
-    ): this(testContext, createClient, Array.Empty<RequestDefinition>())
+    ): this(testContext, createClient, Array.Empty<ApiTestStep>())
     {
     }
 
     public WhenApiSpecificationBuilder When(params RequestTransform[] when) =>
-        new(createClient, testContext, given, new RequestDefinition(when));
+        When("", when);
+
+    public WhenApiSpecificationBuilder When(string description, params RequestTransform[] when) =>
+        When("", new RequestDefinition(when, description));
+
+    public WhenApiSpecificationBuilder When(RequestDefinition when) => When(when.Description, when);
+
+    public WhenApiSpecificationBuilder When(string description, RequestDefinition when) =>
+        new(
+            createClient,
+            testContext,
+            given,
+            new ApiTestStep(TestPhase.When, when, description)
+        );
 }
 
 public class WhenApiSpecificationBuilder
 {
-    private readonly RequestDefinition[] given;
-    private readonly RequestDefinition when;
+    private readonly ApiTestStep[] given;
+    private readonly ApiTestStep when;
     private readonly Func<HttpClient> createClient;
     private readonly TestContext testContext;
     private RetryPolicy retryPolicy;
@@ -45,8 +58,8 @@ public class WhenApiSpecificationBuilder
     internal WhenApiSpecificationBuilder(
         Func<HttpClient> createClient,
         TestContext testContext,
-        RequestDefinition[] given,
-        RequestDefinition when
+        ApiTestStep[] given,
+        ApiTestStep when
     )
     {
         this.createClient = createClient;
@@ -79,10 +92,10 @@ public class WhenApiSpecificationBuilder
 
         // Given
         foreach (var givenBuilder in given)
-            await Send(client, RetryPolicy.NoRetry, TestPhase.Given, givenBuilder, testContext, ct);
+            await Send(client, RetryPolicy.NoRetry, givenBuilder, testContext, ct);
 
         // When
-        var response = await Send(client, retryPolicy, TestPhase.When, when, testContext, ct);
+        var response = await Send(client, retryPolicy, when, testContext, ct);
 
         // Then
         foreach (var then in thens)
@@ -96,18 +109,17 @@ public class WhenApiSpecificationBuilder
     private static Task<HttpResponseMessage> Send(
         HttpClient client,
         RetryPolicy retryPolicy,
-        TestPhase testPhase,
-        RequestDefinition requestBuilder,
+        ApiTestStep testStep,
         TestContext testContext,
         CancellationToken ct
     ) =>
         retryPolicy
             .Perform(async t =>
             {
-                var request = TestApiRequest.For(testContext, requestBuilder.Transformations);
+                var request = TestApiRequest.For(testContext, testStep.RequestDefinition);
                 var response = await client.SendAsync(request, t);
 
-                testContext.Record(testPhase, request, response);
+                testContext.Record(testStep, request, response);
 
                 return response;
             }, testContext, ct);
@@ -120,14 +132,23 @@ public enum TestPhase
     Then
 }
 
-public record MadeApiCall(TestPhase TestPhase, HttpRequestMessage Request, HttpResponseMessage Response, string Description = "");
+public record RequestDefinition(RequestTransform[] Transformations, string Description = "");
+
+public record ApiTestStep(TestPhase Phase, RequestDefinition RequestDefinition, string Description = "");
+
+public record MadeApiCall(TestPhase TestPhase, HttpRequestMessage Request, HttpResponseMessage Response,
+    string Description = "");
 
 public class TestContext
 {
     public List<MadeApiCall> Calls { get; } = new();
 
-    public void Record(TestPhase testPhase, HttpRequestMessage request, HttpResponseMessage response) =>
-        Calls.Add(new MadeApiCall(testPhase, request, response));
+    public void Record(ApiTestStep testStep, HttpRequestMessage request, HttpResponseMessage response) =>
+        Calls.Add(new MadeApiCall(testStep.Phase, request, response, testStep.RequestDefinition.Description));
+
+
+    public string GetCreatedId() =>
+        Calls.First(c => c.Response.StatusCode == HttpStatusCode.Created).Response.GetCreatedId();
 
     public T GetCreatedId<T>() where T : notnull =>
         Calls.First(c => c.Response.StatusCode == HttpStatusCode.Created).Response.GetCreatedId<T>();
