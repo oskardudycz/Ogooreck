@@ -70,7 +70,7 @@ public class WhenApiSpecificationBuilder
     }
 
     public WhenApiSpecificationBuilder Until(
-        Func<HttpResponseMessage, TestContext, ValueTask<bool>> check,
+        RetryCheck check,
         int maxNumberOfRetries = 5,
         int retryIntervalInMs = 1000
     )

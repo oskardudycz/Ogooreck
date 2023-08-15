@@ -12,6 +12,16 @@ public static class ApiSpecification
     ////   GIVEN   ////
     ///////////////////
 
+    public static GivenApiSpecificationBuilder Given<TProgram>(this ApiSpecification<TProgram> api,
+        params RequestTransform[] when) where TProgram : class =>
+        api.Given(new RequestDefinition(when));
+
+
+    public static GivenApiSpecificationBuilder Given<TProgram>(this ApiSpecification<TProgram> api,
+        string description,
+        params RequestTransform[] when) where TProgram : class =>
+        api.Given(description, new RequestDefinition(when, description));
+
     ///////////////////
     ////   WHEN    ////
     ///////////////////
@@ -103,10 +113,28 @@ public static class ApiSpecification
         result.ContinueWith(_ => and);
 
     public static Task<GivenApiSpecificationBuilder> And(this Task<Result> result) =>
-        result.ContinueWith(_ => new GivenApiSpecificationBuilder(result.Result.TestContext, result.Result.CreateClient));
+        result.ContinueWith(
+            _ => new GivenApiSpecificationBuilder(result.Result.TestContext, result.Result.CreateClient));
+
+    public static Task<WhenApiSpecificationBuilder> AndWhen(
+        this Task<Result> result,
+        string description,
+        params RequestTransform[] when
+    ) =>
+        result.And().When(description, when);
 
     public static Task<WhenApiSpecificationBuilder> AndWhen(this Task<Result> result, params RequestTransform[] when) =>
         result.And().When(when);
+
+    public static Task<WhenApiSpecificationBuilder> AndWhen(
+        this Task<Result> result,
+        string description,
+        Func<HttpResponseMessage, RequestTransform[]> when
+    ) =>
+        result.ContinueWith(r =>
+            new GivenApiSpecificationBuilder(r.Result.TestContext, r.Result.CreateClient)
+                .When(description, when(r.Result.Response))
+        );
 
     public static Task<WhenApiSpecificationBuilder> AndWhen(
         this Task<Result> result,
@@ -118,13 +146,20 @@ public static class ApiSpecification
 
     public static Task<WhenApiSpecificationBuilder> When(
         this Task<GivenApiSpecificationBuilder> result,
+        string description,
+        params RequestTransform[] when
+    ) =>
+        result.ContinueWith(_ => result.Result.When(description, when));
+
+    public static Task<WhenApiSpecificationBuilder> When(
+        this Task<GivenApiSpecificationBuilder> result,
         params RequestTransform[] when
     ) =>
         result.ContinueWith(_ => result.Result.When(when));
 
     public static Task<WhenApiSpecificationBuilder> Until(
         this Task<WhenApiSpecificationBuilder> when,
-        Func<HttpResponseMessage, TestContext, ValueTask<bool>> check,
+        RetryCheck check,
         int maxNumberOfRetries = 5,
         int retryIntervalInMs = 1000
     ) =>
@@ -216,14 +251,6 @@ public static class ApiSpecification
     public static Func<HttpResponseMessage, Task<T>> CREATED_ID<T>() =>
         response => Task.FromResult(response.GetCreatedId<T>());
 
-    public static Func<HttpResponseMessage, TestContext, ValueTask<bool>> RESPONSE_ETAG_IS(object eTag,
-        bool isWeak = true) =>
-        async (response, ctx) =>
-        {
-            await RESPONSE_ETAG_HEADER(eTag, isWeak)(response, ctx);
-            return true;
-        };
-
     public static ResponseAssert RESPONSE_ETAG_HEADER(object eTag, bool isWeak = true) =>
         RESPONSE_HEADERS(headers =>
         {
@@ -260,15 +287,27 @@ public static class ApiSpecification
             return ValueTask.CompletedTask;
         };
 
-    public static Func<HttpResponseMessage, ValueTask<bool>> RESPONSE_SUCCEEDED() =>
-        response =>
+    /////////////////
+    //     UNTIL
+    ////////////////
+
+    public static RetryCheck RESPONSE_ETAG_IS(object eTag,
+        bool isWeak = true) =>
+        async (response, ctx) =>
+        {
+            await RESPONSE_ETAG_HEADER(eTag, isWeak)(response, ctx);
+            return true;
+        };
+
+    public static RetryCheck RESPONSE_SUCCEEDED() =>
+        (response, ctx) =>
         {
             response.EnsureSuccessStatusCode();
             return new ValueTask<bool>(true);
         };
 
-    public static Func<HttpResponseMessage, ValueTask<bool>> RESPONSE_BODY_MATCHES<TBody>(Func<TBody, bool> assert) =>
-        async response =>
+    public static RetryCheck RESPONSE_BODY_MATCHES<TBody>(Func<TBody, bool> assert) =>
+        async (response, ctx) =>
         {
             response.EnsureSuccessStatusCode();
 

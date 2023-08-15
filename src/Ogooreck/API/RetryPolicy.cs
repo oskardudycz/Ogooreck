@@ -4,7 +4,7 @@ namespace Ogooreck.API;
 
 #pragma warning disable CS1591
 public record RetryPolicy(
-    Func<HttpResponseMessage, TestContext, ValueTask<bool>> Check,
+    RetryCheck Check,
     int MaxNumberOfRetries = 5,
     int RetryIntervalInMs = 1000
 )
@@ -44,3 +44,6 @@ public record RetryPolicy(
         0
     );
 }
+
+public delegate ValueTask<bool> RetryCheck(HttpResponseMessage responseMessage, TestContext testContext);
+
