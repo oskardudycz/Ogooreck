@@ -19,7 +19,9 @@ public static class ObjectFactory<T>
         if (t.HasDefaultConstructor())
             return Expression.Lambda<Func<T>>(Expression.New(t)).Compile();
 
+#pragma warning disable SYSLIB0050
         return () => (T)FormatterServices.GetUninitializedObject(t);
+#pragma warning restore SYSLIB0050
     }
 }
 
