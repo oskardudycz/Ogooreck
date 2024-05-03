@@ -80,14 +80,14 @@ public class ThenDeciderSpecificationBuilder<TEvent, TState>
     public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params TEvent[] expectedEvents)
     {
         var result = getResult.Value;
-        result.NewEvents.Should().BeEquivalentTo(expectedEvents);
+        result.NewEvents.Cast<object>().Should().BeEquivalentTo(expectedEvents.Cast<object>(), "Expected events don't match the result");
         return this;
     }
 
     public ThenDeciderSpecificationBuilder<TEvent, TState> Then(TState expectedState)
     {
         var result = getResult.Value;
-        result.CurrentState.Should().BeEquivalentTo(expectedState);
+        result.CurrentState.Should().BeEquivalentTo(expectedState, "Expected events don't match the result");
         return this;
     }
 
