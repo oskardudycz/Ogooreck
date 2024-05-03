@@ -47,7 +47,7 @@ type BankAccount =
 
 let evolve bankAccount bankAccountEvent : BankAccount =
     match bankAccount, bankAccountEvent with
-    | Initial _, BankAccountOpened event ->
+    | Initial, BankAccountOpened event ->
         Open
             {| Id = event.BankAccountId
                Balance = 0M

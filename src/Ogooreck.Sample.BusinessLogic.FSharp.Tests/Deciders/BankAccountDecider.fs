@@ -33,7 +33,7 @@ let openBankAccount (command: OpenBankAccount) bankAccount : Event =
     match bankAccount with
     | Open _ -> invalidOp "Account is already opened!"
     | Closed _ -> invalidOp "Account is already closed!"
-    | Initial _ ->
+    | Initial ->
         BankAccountOpened
             { BankAccountId = command.BankAccountId
               AccountNumber = command.AccountNumber
@@ -44,7 +44,7 @@ let openBankAccount (command: OpenBankAccount) bankAccount : Event =
 
 let recordDeposit (command: RecordDeposit) bankAccount : Event =
     match bankAccount with
-    | Initial _ -> invalidOp "Account is not opened!"
+    | Initial -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is closed!"
     | Open state ->
         DepositRecorded
@@ -56,7 +56,7 @@ let recordDeposit (command: RecordDeposit) bankAccount : Event =
 
 let withdrawCashFromAtm (command: WithdrawCashFromAtm) bankAccount : Event =
     match bankAccount with
-    | Initial _ -> invalidOp "Account is not opened!"
+    | Initial -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is closed!"
     | Open state ->
         if (state.Balance < command.Amount) then
@@ -71,7 +71,7 @@ let withdrawCashFromAtm (command: WithdrawCashFromAtm) bankAccount : Event =
 
 let closeBankAccount (command: CloseBankAccount) bankAccount : Event =
     match bankAccount with
-    | Initial _ -> invalidOp "Account is not opened!"
+    | Initial -> invalidOp "Account is not opened!"
     | Closed _ -> invalidOp "Account is already closed!"
     | Open state ->
         BankAccountClosed
