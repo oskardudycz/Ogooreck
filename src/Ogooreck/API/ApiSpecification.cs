@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 #pragma warning disable CS1591
 
@@ -25,6 +27,10 @@ public class ApiSpecification<TProgram>: IDisposable where TProgram : class
 
     public static ApiSpecification<TProgram> Setup(WebApplicationFactory<TProgram> applicationFactory) =>
         new(applicationFactory);
+
+    public static ApiSpecification<TProgram> With(ILoggerProvider loggerProvider) =>
+        new(new WebApplicationFactory<TProgram>().WithWebHostBuilder(
+            b => b.ConfigureServices(s => s.AddSingleton(loggerProvider))));
 
     public GivenApiSpecificationBuilder Given(
         params RequestDefinition[] builders
@@ -70,8 +76,17 @@ public class ApiSpecification<TProgram>: IDisposable where TProgram : class
         return response;
     }
 
-    public void Dispose() =>
-        applicationFactory.Dispose();
+    public void Dispose()
+    {
+        try
+        {
+            applicationFactory.Dispose();
+        }
+        catch (Exception exc)
+        {
+            Console.WriteLine($"Error disposing WebApplicationFactory: {exc}");
+        }
+    }
 }
 
 public class TestApiRequest
