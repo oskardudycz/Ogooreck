@@ -35,7 +35,7 @@
   support multiple body assertions/extractions on the same response.
 - Final `./build.sh test pack`: 145 tests passed (API 3, C# business logic 15,
   F# 5, library 122), with zero build warnings/errors. No duplicated v2/v3 suite.
-- Produced `artifacts/Ogooreck.0.8.2.nupkg` and symbol package without publishing
+- Produced `artifacts/Ogooreck.0.9.0.nupkg` and symbol package without publishing
   or changing the release version. Package targets net10.0 and has only
   Microsoft.AspNetCore.Mvc.Testing 10.0.14 as a direct package dependency.
 - All seven current restored dependency graphs exclude Newtonsoft.Json and
