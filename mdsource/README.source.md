@@ -53,206 +53,12 @@ Read more in the [Testing business logic in Event Sourcing, and beyond!](https:/
 You can use `DeciderSpecification` to run decider and command handling tests. See the example:
 
 **C#**
-```csharp
-using FluentAssertions;
-using Ogooreck.BusinessLogic;
-
-namespace Ogooreck.Sample.BusinessLogic.Tests.Deciders;
-
-using static BankAccountEventsBuilder;
-
-public class BankAccountTests
-{
-    private readonly Random random = new();
-    private static readonly DateTimeOffset now = DateTimeOffset.UtcNow;
-
-    private readonly DeciderSpecification<BankAccount> Spec = Specification.For<BankAccount>(
-        (command, bankAccount) => BankAccountDecider.Handle(() => now, command, bankAccount),
-        BankAccount.Evolve
-    );
-
-    [Fact]
-    public void GivenNonExistingBankAccount_WhenOpenWithValidParams_ThenSucceeds()
-    {
-        var bankAccountId = Guid.NewGuid();
-        var accountNumber = Guid.NewGuid().ToString();
-        var clientId = Guid.NewGuid();
-        var currencyISOCode = "USD";
-
-        Spec.Given()
-            .When(new OpenBankAccount(bankAccountId, accountNumber, clientId, currencyISOCode))
-            .Then(new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1));
-    }
-
-    [Fact]
-    public void GivenOpenBankAccount_WhenRecordDepositWithValidParams_ThenSucceeds()
-    {
-        var bankAccountId = Guid.NewGuid();
-
-        var amount = (decimal)random.NextDouble();
-        var cashierId = Guid.NewGuid();
-
-        Spec.Given(BankAccountOpened(bankAccountId, now, 1))
-            .When(new RecordDeposit(amount, cashierId))
-            .Then(new DepositRecorded(bankAccountId, amount, cashierId, now, 2));
-    }
-
-    [Fact]
-    public void GivenClosedBankAccount_WhenRecordDepositWithValidParams_ThenFailsWithInvalidOperationException()
-    {
-        var bankAccountId = Guid.NewGuid();
-
-        var amount = (decimal)random.NextDouble();
-        var cashierId = Guid.NewGuid();
-
-        Spec.Given(
-                BankAccountOpened(bankAccountId, now, 1),
-                BankAccountClosed(bankAccountId, now, 2)
-            )
-            .When(new RecordDeposit(amount, cashierId))
-            .ThenThrows<InvalidOperationException>(exception => exception.Message.Should().Be("Account is closed!"));
-    }
-}
-
-public static class BankAccountEventsBuilder
-{
-    public static BankAccountOpened BankAccountOpened(Guid bankAccountId, DateTimeOffset now, long version)
-    {
-        var accountNumber = Guid.NewGuid().ToString();
-        var clientId = Guid.NewGuid();
-        var currencyISOCode = "USD";
-
-        return new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, version);
-    }
-
-    public static BankAccountClosed BankAccountClosed(Guid bankAccountId, DateTimeOffset now, long version)
-    {
-        var reason = Guid.NewGuid().ToString();
-
-        return new BankAccountClosed(bankAccountId, reason, now, version);
-    }
-}
-```
+snippet: BankAccountDeciderTests
 
 See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs).
 
 **F#**
-```fsharp
-module BankAccountTests
-
-open System
-open Deciders.BankAccount
-open Deciders.BankAccountPrimitives
-open Deciders.BankAccountDecider
-open Ogooreck.BusinessLogic
-open FsCheck.Xunit
-
-let random = Random()
-
-let spec =
-    Specification.For(decide, evolve, Initial)
-
-let BankAccountOpenedWith bankAccountId now version =
-    let accountNumber =
-        AccountNumber.parse (Guid.NewGuid().ToString())
-
-    let clientId = ClientId.newId ()
-
-    let currencyISOCode =
-        CurrencyIsoCode.parse "USD"
-
-    BankAccountOpened
-        { BankAccountId = bankAccountId
-          AccountNumber = accountNumber
-          ClientId = clientId
-          CurrencyIsoCode = currencyISOCode
-          CreatedAt = now
-          Version = version }
-
-let BankAccountClosedWith bankAccountId now version =
-    BankAccountClosed
-        { BankAccountId = bankAccountId
-          Reason = Guid.NewGuid().ToString()
-          ClosedAt = now
-          Version = version }
-
-[<Property>]
-let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened``
-    bankAccountId
-    accountNumber
-    clientId
-    currencyISOCode
-    now
-    =
-    let notExistingAccount = Array.empty
-
-    spec
-        .Given(notExistingAccount)
-        .When(
-            OpenBankAccount
-                { BankAccountId = bankAccountId
-                  AccountNumber = accountNumber
-                  ClientId = clientId
-                  CurrencyIsoCode = currencyISOCode
-                  Now = now }
-        )
-        .Then(
-            BankAccountOpened
-                { BankAccountId = bankAccountId
-                  AccountNumber = accountNumber
-                  ClientId = clientId
-                  CurrencyIsoCode = currencyISOCode
-                  CreatedAt = now
-                  Version = 1 }
-        )
-    |> ignore
-
-[<Property>]
-let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit is recorded``
-    bankAccountId
-    amount
-    cashierId
-    now
-    =
-    spec
-        .Given(BankAccountOpenedWith bankAccountId now 1)
-        .When(
-            RecordDeposit
-                { Amount = amount
-                  CashierId = cashierId
-                  Now = now }
-        )
-        .Then(
-            DepositRecorded
-                { BankAccountId = bankAccountId
-                  Amount = amount
-                  CashierId = cashierId
-                  RecordedAt = now
-                  Version = 2 }
-        )
-    |> ignore
-
-[<Property>]
-let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails with invalid operation exception``
-    bankAccountId
-    amount
-    cashierId
-    now
-    =
-    spec
-        .Given(
-            BankAccountOpenedWith bankAccountId now 1,
-            BankAccountClosedWith bankAccountId now 2
-        )
-        .When(
-            RecordDeposit
-                { Amount = amount
-                  CashierId = cashierId
-                  Now = now }
-        )
-        .ThenThrows<InvalidOperationException>
-    |> ignore
-```
+snippet: FSharpBankAccountDeciderTests
 
 See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs).
 
@@ -495,88 +301,7 @@ See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/E
 
 You can use `HandlerSpecification` to run event-driven aggregat tests. See the example:
 
-```csharp
-using FluentAssertions;
-using Ogooreck.BusinessLogic;
-using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Pricing;
-using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Products;
-
-namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased;
-
-using static ShoppingCartEventsBuilder;
-using static ProductItemBuilder;
-
-public class ShoppingCartTests
-{
-    private readonly Random random = new();
-
-    private readonly HandlerSpecification<ShoppingCart> Spec = Specification.For<ShoppingCart>();
-
-    private class DummyProductPriceCalculator: IProductPriceCalculator
-    {
-        private readonly decimal price;
-
-        public DummyProductPriceCalculator(decimal price) => this.price = price;
-
-        public IReadOnlyList<PricedProductItem> Calculate(params ProductItem[] productItems) =>
-            productItems.Select(pi => PricedProductItem.For(pi, price)).ToList();
-    }
-
-    [Fact]
-    public void GivenNonExistingShoppingCart_WhenOpenWithValidParams_ThenSucceeds()
-    {
-        var shoppingCartId = Guid.NewGuid();
-        var clientId = Guid.NewGuid();
-
-        Spec.Given()
-            .When(() => ShoppingCart.Open(shoppingCartId, clientId))
-            .Then((state, _) =>
-            {
-                state.Id.Should().Be(shoppingCartId);
-                state.ClientId.Should().Be(clientId);
-                state.ProductItems.Should().BeEmpty();
-                state.Status.Should().Be(ShoppingCartStatus.Pending);
-                state.TotalPrice.Should().Be(0);
-            });
-    }
-
-    [Fact]
-    public void GivenOpenShoppingCart_WhenAddProductWithValidParams_ThenSucceeds()
-    {
-        var shoppingCartId = Guid.NewGuid();
-
-        var productItem = ValidProductItem();
-        var price = random.Next(1, 1000);
-        var priceCalculator = new DummyProductPriceCalculator(price);
-
-        Spec.Given(OpenedShoppingCart(shoppingCartId))
-            .When(cart => cart.AddProduct(priceCalculator, productItem))
-            .Then((state, _) =>
-            {
-                state.ProductItems.Should().NotBeEmpty();
-                state.ProductItems.Single().Should().Be(PricedProductItem.For(productItem, price));
-            });
-    }
-}
-
-public static class ShoppingCartEventsBuilder
-{
-    public static ShoppingCart OpenedShoppingCart(Guid shoppingCartId)
-    {
-        var clientId = Guid.NewGuid();
-
-        return ShoppingCart.Open(shoppingCartId, clientId);
-    }
-}
-
-public static class ProductItemBuilder
-{
-    private static readonly Random Random = new();
-
-    public static ProductItem ValidProductItem() =>
-        ProductItem.From(Guid.NewGuid(), Random.Next(1, 100));
-}
-```
+snippet: StateBasedShoppingCartTests
 
 See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs).
 
@@ -700,7 +425,7 @@ public Task GET_ReturnsShoppingCartDetails() =>
         )
         .Then(
             RESPONSE_BODY<IReadOnlyCollection<Meeting>>(meetings =>
-                meetings.Should().Contain(meeting =>
+                Assert.Contains(meetings, meeting =>
                     meeting.Id == MeetingId
                     && meeting.Name == MeetingName
                 )
@@ -844,11 +569,11 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
                 OK,
                 RESPONSE_BODY<ReservationDetails>(reservation =>
                 {
-                    reservation.Id.Should().Be(createdReservationId);
-                    reservation.Status.Should().Be(ReservationStatus.Tentative);
-                    reservation.SeatId.Should().Be(SeatId);
-                    reservation.Number.Should().NotBeEmpty();
-                    reservation.Version.Should().Be(1);
+                    Assert.Equal(createdReservationId, reservation.Id);
+                    Assert.Equal(ReservationStatus.Tentative, reservation.Status);
+                    Assert.Equal(SeatId, reservation.SeatId);
+                    Assert.NotEmpty(reservation.Number);
+                    Assert.Equal(1, reservation.Version);
                 })),
 
         // Get reservations list
@@ -858,18 +583,18 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
                 OK,
                 RESPONSE_BODY<PagedListResponse<ReservationShortInfo>>(reservations =>
                 {
-                    reservations.Should().NotBeNull();
-                    reservations.Items.Should().NotBeNull();
+                    Assert.NotNull(reservations);
+                    Assert.NotNull(reservations.Items);
 
-                    reservations.Items.Should().HaveCount(1);
-                    reservations.TotalItemCount.Should().Be(1);
-                    reservations.HasNextPage.Should().Be(false);
+                    Assert.Equal(1, reservations.Items.Count);
+                    Assert.Equal(1, reservations.TotalItemCount);
+                    Assert.Equal(false, reservations.HasNextPage);
 
                     var reservationInfo = reservations.Items.Single();
 
-                    reservationInfo.Id.Should().Be(createdReservationId);
-                    reservationInfo.Number.Should().NotBeNull().And.NotBeEmpty();
-                    reservationInfo.Status.Should().Be(ReservationStatus.Tentative);
+                    Assert.Equal(createdReservationId, reservationInfo.Id);
+                    Assert.False(string.IsNullOrEmpty(reservationInfo.Number));
+                    Assert.Equal(ReservationStatus.Tentative, reservationInfo.Status);
                 })),
 
         // Get reservation history
@@ -879,17 +604,17 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
                 OK,
                 RESPONSE_BODY<PagedListResponse<ReservationHistory>>(reservations =>
                 {
-                    reservations.Should().NotBeNull();
-                    reservations.Items.Should().NotBeNull();
+                    Assert.NotNull(reservations);
+                    Assert.NotNull(reservations.Items);
 
-                    reservations.Items.Should().HaveCount(1);
-                    reservations.TotalItemCount.Should().Be(1);
-                    reservations.HasNextPage.Should().Be(false);
+                    Assert.Equal(1, reservations.Items.Count);
+                    Assert.Equal(1, reservations.TotalItemCount);
+                    Assert.Equal(false, reservations.HasNextPage);
 
                     var reservationInfo = reservations.Items.Single();
 
-                    reservationInfo.ReservationId.Should().Be(createdReservationId);
-                    reservationInfo.Description.Should().StartWith("Created tentative reservation with number");
+                    Assert.Equal(createdReservationId, reservationInfo.ReservationId);
+                    Assert.StartsWith("Created tentative reservation with number", reservationInfo.Description);
                 }))
     );
 }
@@ -932,7 +657,7 @@ public class GetProductDetailsFixture: ApiSpecification<Program>, IAsyncLifetime
 
     public GetProductDetailsFixture(): base(new WarehouseTestWebApplicationFactory()) { }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var registerProduct = new RegisterProductRequest("IN11111", "ValidName", "ValidDescription");
         var productId = await Given()
@@ -944,7 +669,11 @@ public class GetProductDetailsFixture: ApiSpecification<Program>, IAsyncLifetime
         ExistingProduct = new ProductDetails(productId, sku!, name!, description);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 }
 
 public class GetProductDetailsTests: IClassFixture<GetProductDetailsFixture>

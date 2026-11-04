@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Ogooreck.Assertions;
 
 namespace Ogooreck.API;
 
@@ -33,7 +33,7 @@ public record RetryPolicy(
             retryCount--;
         } while (!finished);
 
-        response.Should().NotBeNull();
+        Expect.That(response is not null, "Expected an HTTP response.");
 
         return response!;
     }

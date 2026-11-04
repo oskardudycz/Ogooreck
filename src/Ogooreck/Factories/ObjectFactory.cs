@@ -1,6 +1,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Runtime.Serialization;
+using System.Runtime.CompilerServices;
 
 #pragma warning disable CS1591
 
@@ -19,9 +19,7 @@ public static class ObjectFactory<T>
         if (t.HasDefaultConstructor())
             return Expression.Lambda<Func<T>>(Expression.New(t)).Compile();
 
-#pragma warning disable SYSLIB0050
-        return () => (T)FormatterServices.GetUninitializedObject(t);
-#pragma warning restore SYSLIB0050
+        return () => (T)RuntimeHelpers.GetUninitializedObject(t);
     }
 }
 

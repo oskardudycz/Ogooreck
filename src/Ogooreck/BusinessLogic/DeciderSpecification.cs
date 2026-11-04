@@ -1,4 +1,4 @@
-using FluentAssertions;
+using Ogooreck.Assertions;
 
 #pragma warning disable CS1591
 
@@ -80,14 +80,14 @@ public class ThenDeciderSpecificationBuilder<TEvent, TState>
     public ThenDeciderSpecificationBuilder<TEvent, TState> Then(params TEvent[] expectedEvents)
     {
         var result = getResult.Value;
-        result.NewEvents.Cast<object>().Should().BeEquivalentTo(expectedEvents.Cast<object>(), "Expected events don't match the result");
+        Expect.OrderedEquivalent(result.NewEvents, expectedEvents, "Event");
         return this;
     }
 
     public ThenDeciderSpecificationBuilder<TEvent, TState> Then(TState expectedState)
     {
         var result = getResult.Value;
-        result.CurrentState.Should().BeEquivalentTo(expectedState, "Expected events don't match the result");
+        Expect.Equivalent(result.CurrentState, expectedState, "Expected state does not match the result");
         return this;
     }
 
@@ -137,8 +137,9 @@ public class ThenDeciderSpecificationBuilder<TEvent, TState>
         catch (TException e)
         {
             assert?.Invoke(e);
+            return this;
         }
 
-        return this;
+        throw new AssertionException($"Expected {typeof(TException).Name}, but no exception was thrown.");
     }
 }

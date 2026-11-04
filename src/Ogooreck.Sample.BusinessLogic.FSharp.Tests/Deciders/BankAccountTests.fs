@@ -1,3 +1,4 @@
+// begin-snippet: FSharpBankAccountDeciderTests
 module BankAccountTests
 
 open System
@@ -37,7 +38,7 @@ let BankAccountClosedWith bankAccountId now version =
           Version = version }
 
 [<Property>]
-let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened``
+let ``GIVEN missing account WHEN open THEN account is opened``
     bankAccountId
     accountNumber
     clientId
@@ -68,7 +69,7 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
     |> ignore
 
 [<Property>]
-let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit is recorded``
+let ``GIVEN open account WHEN deposit THEN deposit is recorded``
     bankAccountId
     amount
     cashierId
@@ -93,7 +94,7 @@ let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit
     |> ignore
 
 [<Property>]
-let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails with invalid operation exception``
+let ``GIVEN closed account WHEN deposit THEN throws``
     bankAccountId
     amount
     cashierId
@@ -110,5 +111,6 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
                   CashierId = cashierId
                   Now = now }
         )
-        .ThenThrows<InvalidOperationException>
+        .ThenThrows<InvalidOperationException>()
     |> ignore
+// end-snippet

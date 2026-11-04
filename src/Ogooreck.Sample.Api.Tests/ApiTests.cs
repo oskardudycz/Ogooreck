@@ -33,4 +33,21 @@ public class Tests: IClassFixture<ApiSpecification<Program>>
             .Then(CREATED, RESPONSE_LOCATION_HEADER());
 
     #endregion ApiPostSample
+
+    [Fact]
+    public async Task CanRegisterAndReadAProductUsingAClassFixture()
+    {
+        var ct = Xunit.TestContext.Current.CancellationToken;
+        var created = API.Given()
+            .When(
+                POST,
+                URI("/api/products"),
+                BODY(new RegisterProductRequest("xunit-v3", "Product"))
+            )
+            .Then([CREATED, RESPONSE_LOCATION_HEADER()], ct);
+
+        var id = (await created).Response.GetCreatedId<Guid>();
+        await created.AndWhen(GET, URI($"/api/products/{id}"))
+            .Then([OK, RESPONSE_BODY(new Product(id, "xunit-v3", "Product"))], ct);
+    }
 }

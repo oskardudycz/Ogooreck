@@ -1,7 +1,6 @@
 using System.ComponentModel;
-using FluentAssertions;
-using Newtonsoft.Json;
-using Ogooreck.Newtonsoft;
+using System.Text.Json;
+using Ogooreck.Assertions;
 
 namespace Ogooreck.API;
 
@@ -63,8 +62,8 @@ public static class HttpResponseMessageExtensions
     }
 
     public static T GetETagValue<T>(this HttpResponseMessage response) =>
-        response.TryGetCreatedId<T>(out var createdId)
-            ? createdId!
+        response.TryGetETagValue<T>(out var eTag)
+            ? eTag!
             : throw new ArgumentOutOfRangeException(nameof(response.Headers.ETag));
 
     public static string GetETagValue(this HttpResponseMessage response) =>
@@ -72,25 +71,21 @@ public static class HttpResponseMessageExtensions
 
     public static Task<T> GetResultFromJson<T>(
         this ApiSpecification.Result result,
-        JsonSerializerSettings? settings = null
+        JsonSerializerOptions? options = null
     ) =>
-        result.Response.GetResultFromJson<T>();
+        result.Response.GetResultFromJson<T>(options);
 
 
     public static async Task<T> GetResultFromJson<T>(
         this HttpResponseMessage response,
-        JsonSerializerSettings? settings = null
+        JsonSerializerOptions? options = null
     )
     {
-        var result = await response.Content.ReadAsStringAsync();
-
-        result.Should().NotBeNull();
-        result.Should().NotBeEmpty();
-
-        var deserialised = result.FromJson<T>(settings);
-
-        deserialised.Should().NotBeNull();
-
+        // Scenarios may assert or extract the same body more than once. HttpContent
+        // buffers text reads, unlike consuming and disposing its JSON stream.
+        var json = await response.Content.ReadAsStringAsync();
+        var deserialised = JsonSerializer.Deserialize<T>(json, options ?? JsonSerializerOptions.Web);
+        Expect.That(deserialised is not null, "Expected a JSON response value, but found null.");
         return deserialised;
     }
 }

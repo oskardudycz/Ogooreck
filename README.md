@@ -53,8 +53,9 @@ Read more in the [Testing business logic in Event Sourcing, and beyond!](https:/
 You can use `DeciderSpecification` to run decider and command handling tests. See the example:
 
 **C#**
-```csharp
-using FluentAssertions;
+<!-- snippet: BankAccountDeciderTests -->
+<a id='snippet-BankAccountDeciderTests'></a>
+```cs
 using Ogooreck.BusinessLogic;
 
 namespace Ogooreck.Sample.BusinessLogic.Tests.Deciders;
@@ -66,13 +67,15 @@ public class BankAccountTests
     private readonly Random random = new();
     private static readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
-    private readonly DeciderSpecification<BankAccount> Spec = Specification.For<BankAccount>(
-        (command, bankAccount) => BankAccountDecider.Handle(() => now, command, bankAccount),
-        BankAccount.Evolve
-    );
+    private readonly DeciderSpecification<BankAccount> Spec =
+        Specification.For<BankAccount>(
+            (command, bankAccount) =>
+                BankAccountDecider.Handle(() => now, command, bankAccount),
+            BankAccount.Evolve
+        );
 
     [Fact]
-    public void GivenNonExistingBankAccount_WhenOpenWithValidParams_ThenSucceeds()
+    public void GivenMissingAccount_WhenOpen_ThenSucceeds()
     {
         var bankAccountId = Guid.NewGuid();
         var accountNumber = Guid.NewGuid().ToString();
@@ -80,12 +83,15 @@ public class BankAccountTests
         var currencyISOCode = "USD";
 
         Spec.Given()
-            .When(new OpenBankAccount(bankAccountId, accountNumber, clientId, currencyISOCode))
-            .Then(new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, 1));
+            .When(new OpenBankAccount(
+                bankAccountId, accountNumber, clientId, currencyISOCode))
+            .Then(new BankAccountOpened(
+                bankAccountId, accountNumber, clientId,
+                currencyISOCode, now, 1));
     }
 
     [Fact]
-    public void GivenOpenBankAccount_WhenRecordDepositWithValidParams_ThenSucceeds()
+    public void GivenOpenAccount_WhenRecordDeposit_ThenSucceeds()
     {
         var bankAccountId = Guid.NewGuid();
 
@@ -94,11 +100,12 @@ public class BankAccountTests
 
         Spec.Given(BankAccountOpened(bankAccountId, now, 1))
             .When(new RecordDeposit(amount, cashierId))
-            .Then(new DepositRecorded(bankAccountId, amount, cashierId, now, 2));
+            .Then(new DepositRecorded(
+                bankAccountId, amount, cashierId, now, 2));
     }
 
     [Fact]
-    public void GivenClosedBankAccount_WhenRecordDepositWithValidParams_ThenFailsWithInvalidOperationException()
+    public void GivenClosedAccount_WhenDeposit_ThenThrows()
     {
         var bankAccountId = Guid.NewGuid();
 
@@ -110,22 +117,27 @@ public class BankAccountTests
                 BankAccountClosed(bankAccountId, now, 2)
             )
             .When(new RecordDeposit(amount, cashierId))
-            .ThenThrows<InvalidOperationException>(exception => exception.Message.Should().Be("Account is closed!"));
+            .ThenThrows<InvalidOperationException>(exception =>
+                Assert.Equal("Account is closed!", exception.Message));
     }
 }
 
 public static class BankAccountEventsBuilder
 {
-    public static BankAccountOpened BankAccountOpened(Guid bankAccountId, DateTimeOffset now, long version)
+    public static BankAccountOpened BankAccountOpened(
+        Guid bankAccountId, DateTimeOffset now, long version)
     {
         var accountNumber = Guid.NewGuid().ToString();
         var clientId = Guid.NewGuid();
         var currencyISOCode = "USD";
 
-        return new BankAccountOpened(bankAccountId, accountNumber, clientId, currencyISOCode, now, version);
+        return new BankAccountOpened(
+            bankAccountId, accountNumber, clientId,
+            currencyISOCode, now, version);
     }
 
-    public static BankAccountClosed BankAccountClosed(Guid bankAccountId, DateTimeOffset now, long version)
+    public static BankAccountClosed BankAccountClosed(
+        Guid bankAccountId, DateTimeOffset now, long version)
     {
         var reason = Guid.NewGuid().ToString();
 
@@ -133,11 +145,15 @@ public static class BankAccountEventsBuilder
     }
 }
 ```
+<sup><a href='/src/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs#L1-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-BankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs).
 
 **F#**
-```fsharp
+<!-- snippet: FSharpBankAccountDeciderTests -->
+<a id='snippet-FSharpBankAccountDeciderTests'></a>
+```fs
 module BankAccountTests
 
 open System
@@ -177,7 +193,7 @@ let BankAccountClosedWith bankAccountId now version =
           Version = version }
 
 [<Property>]
-let ``GIVEN non existing bank account WHEN open with valid params THEN bank account is opened``
+let ``GIVEN missing account WHEN open THEN account is opened``
     bankAccountId
     accountNumber
     clientId
@@ -208,7 +224,7 @@ let ``GIVEN non existing bank account WHEN open with valid params THEN bank acco
     |> ignore
 
 [<Property>]
-let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit is recorded``
+let ``GIVEN open account WHEN deposit THEN deposit is recorded``
     bankAccountId
     amount
     cashierId
@@ -233,7 +249,7 @@ let ``GIVEN open bank account WHEN record deposit with valid params THEN deposit
     |> ignore
 
 [<Property>]
-let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails with invalid operation exception``
+let ``GIVEN closed account WHEN deposit THEN throws``
     bankAccountId
     amount
     cashierId
@@ -250,9 +266,11 @@ let ``GIVEN closed bank account WHEN record deposit with valid params THEN fails
                   CashierId = cashierId
                   Now = now }
         )
-        .ThenThrows<InvalidOperationException>
+        .ThenThrows<InvalidOperationException>()
     |> ignore
 ```
+<sup><a href='/src/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs#L1-L116' title='Snippet source file'>snippet source</a> | <a href='#snippet-FSharpBankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs).
 
@@ -495,8 +513,9 @@ See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/E
 
 You can use `HandlerSpecification` to run event-driven aggregat tests. See the example:
 
-```csharp
-using FluentAssertions;
+<!-- snippet: StateBasedShoppingCartTests -->
+<a id='snippet-StateBasedShoppingCartTests'></a>
+```cs
 using Ogooreck.BusinessLogic;
 using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Pricing;
 using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Products;
@@ -510,7 +529,8 @@ public class ShoppingCartTests
 {
     private readonly Random random = new();
 
-    private readonly HandlerSpecification<ShoppingCart> Spec = Specification.For<ShoppingCart>();
+    private readonly HandlerSpecification<ShoppingCart> Spec =
+        Specification.For<ShoppingCart>();
 
     private class DummyProductPriceCalculator: IProductPriceCalculator
     {
@@ -518,12 +538,14 @@ public class ShoppingCartTests
 
         public DummyProductPriceCalculator(decimal price) => this.price = price;
 
-        public IReadOnlyList<PricedProductItem> Calculate(params ProductItem[] productItems) =>
-            productItems.Select(pi => PricedProductItem.For(pi, price)).ToList();
+        public IReadOnlyList<PricedProductItem> Calculate(
+            params ProductItem[] productItems) =>
+            productItems.Select(pi => PricedProductItem.For(pi, price))
+                .ToList();
     }
 
     [Fact]
-    public void GivenNonExistingShoppingCart_WhenOpenWithValidParams_ThenSucceeds()
+    public void GivenMissingCart_WhenOpen_ThenSucceeds()
     {
         var shoppingCartId = Guid.NewGuid();
         var clientId = Guid.NewGuid();
@@ -532,16 +554,16 @@ public class ShoppingCartTests
             .When(() => ShoppingCart.Open(shoppingCartId, clientId))
             .Then((state, _) =>
             {
-                state.Id.Should().Be(shoppingCartId);
-                state.ClientId.Should().Be(clientId);
-                state.ProductItems.Should().BeEmpty();
-                state.Status.Should().Be(ShoppingCartStatus.Pending);
-                state.TotalPrice.Should().Be(0);
+                Assert.Equal(shoppingCartId, state.Id);
+                Assert.Equal(clientId, state.ClientId);
+                Assert.Empty(state.ProductItems);
+                Assert.Equal(ShoppingCartStatus.Pending, state.Status);
+                Assert.Equal(0, state.TotalPrice);
             });
     }
 
     [Fact]
-    public void GivenOpenShoppingCart_WhenAddProductWithValidParams_ThenSucceeds()
+    public void GivenOpenCart_WhenAddProduct_ThenSucceeds()
     {
         var shoppingCartId = Guid.NewGuid();
 
@@ -553,8 +575,10 @@ public class ShoppingCartTests
             .When(cart => cart.AddProduct(priceCalculator, productItem))
             .Then((state, _) =>
             {
-                state.ProductItems.Should().NotBeEmpty();
-                state.ProductItems.Single().Should().Be(PricedProductItem.For(productItem, price));
+                Assert.NotEmpty(state.ProductItems);
+                Assert.Equal(
+                    PricedProductItem.For(productItem, price),
+                    state.ProductItems.Single());
             });
     }
 }
@@ -577,6 +601,8 @@ public static class ProductItemBuilder
         ProductItem.From(Guid.NewGuid(), Random.Next(1, 100));
 }
 ```
+<sup><a href='/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs#L1-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-StateBasedShoppingCartTests' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs).
 
@@ -700,7 +726,7 @@ public Task GET_ReturnsShoppingCartDetails() =>
         )
         .Then(
             RESPONSE_BODY<IReadOnlyCollection<Meeting>>(meetings =>
-                meetings.Should().Contain(meeting =>
+                Assert.Contains(meetings, meeting =>
                     meeting.Id == MeetingId
                     && meeting.Name == MeetingName
                 )
@@ -844,11 +870,11 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
                 OK,
                 RESPONSE_BODY<ReservationDetails>(reservation =>
                 {
-                    reservation.Id.Should().Be(createdReservationId);
-                    reservation.Status.Should().Be(ReservationStatus.Tentative);
-                    reservation.SeatId.Should().Be(SeatId);
-                    reservation.Number.Should().NotBeEmpty();
-                    reservation.Version.Should().Be(1);
+                    Assert.Equal(createdReservationId, reservation.Id);
+                    Assert.Equal(ReservationStatus.Tentative, reservation.Status);
+                    Assert.Equal(SeatId, reservation.SeatId);
+                    Assert.NotEmpty(reservation.Number);
+                    Assert.Equal(1, reservation.Version);
                 })),
 
         // Get reservations list
@@ -858,18 +884,18 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
                 OK,
                 RESPONSE_BODY<PagedListResponse<ReservationShortInfo>>(reservations =>
                 {
-                    reservations.Should().NotBeNull();
-                    reservations.Items.Should().NotBeNull();
+                    Assert.NotNull(reservations);
+                    Assert.NotNull(reservations.Items);
 
-                    reservations.Items.Should().HaveCount(1);
-                    reservations.TotalItemCount.Should().Be(1);
-                    reservations.HasNextPage.Should().Be(false);
+                    Assert.Equal(1, reservations.Items.Count);
+                    Assert.Equal(1, reservations.TotalItemCount);
+                    Assert.Equal(false, reservations.HasNextPage);
 
                     var reservationInfo = reservations.Items.Single();
 
-                    reservationInfo.Id.Should().Be(createdReservationId);
-                    reservationInfo.Number.Should().NotBeNull().And.NotBeEmpty();
-                    reservationInfo.Status.Should().Be(ReservationStatus.Tentative);
+                    Assert.Equal(createdReservationId, reservationInfo.Id);
+                    Assert.False(string.IsNullOrEmpty(reservationInfo.Number));
+                    Assert.Equal(ReservationStatus.Tentative, reservationInfo.Status);
                 })),
 
         // Get reservation history
@@ -879,17 +905,17 @@ public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
                 OK,
                 RESPONSE_BODY<PagedListResponse<ReservationHistory>>(reservations =>
                 {
-                    reservations.Should().NotBeNull();
-                    reservations.Items.Should().NotBeNull();
+                    Assert.NotNull(reservations);
+                    Assert.NotNull(reservations.Items);
 
-                    reservations.Items.Should().HaveCount(1);
-                    reservations.TotalItemCount.Should().Be(1);
-                    reservations.HasNextPage.Should().Be(false);
+                    Assert.Equal(1, reservations.Items.Count);
+                    Assert.Equal(1, reservations.TotalItemCount);
+                    Assert.Equal(false, reservations.HasNextPage);
 
                     var reservationInfo = reservations.Items.Single();
 
-                    reservationInfo.ReservationId.Should().Be(createdReservationId);
-                    reservationInfo.Description.Should().StartWith("Created tentative reservation with number");
+                    Assert.Equal(createdReservationId, reservationInfo.ReservationId);
+                    Assert.StartsWith("Created tentative reservation with number", reservationInfo.Description);
                 }))
     );
 }
@@ -932,7 +958,7 @@ public class GetProductDetailsFixture: ApiSpecification<Program>, IAsyncLifetime
 
     public GetProductDetailsFixture(): base(new WarehouseTestWebApplicationFactory()) { }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var registerProduct = new RegisterProductRequest("IN11111", "ValidName", "ValidDescription");
         var productId = await Given()
@@ -944,7 +970,11 @@ public class GetProductDetailsFixture: ApiSpecification<Program>, IAsyncLifetime
         ExistingProduct = new ProductDetails(productId, sku!, name!, description);
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 }
 
 public class GetProductDetailsTests: IClassFixture<GetProductDetailsFixture>
