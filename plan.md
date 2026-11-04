@@ -109,10 +109,12 @@ Byte collections and multidimensional arrays retain the original ordered rules.
 This work covers Ogooreck's object-graph comparisons; FluentAssertions' configurable
 assertion pipeline and specialized XML/ADO.NET assertion APIs are not recreated.
 
-Response deserialization uses shared `JsonSerializerOptions.Web` defaults unless
-the caller supplies options. Both `GetResultFromJson<T>` overloads forward those
-options. String enums require a serialization attribute or a caller-provided
-`JsonStringEnumConverter<TEnum>`; custom converters and `[JsonConstructor]` follow
+Host-backed scenarios now inherit the tested API's JSON settings automatically,
+with optional per-call overrides. Standalone responses and contexts use shared
+`JsonSerializerOptions.Web` defaults. Both `GetResultFromJson<T>` overloads forward
+explicit options; the Result overload also inherits response options from context.
+String enums use the API's converter, a caller override or a serialization attribute;
+custom converters and `[JsonConstructor]` follow
 standard System.Text.Json rules. Empty/invalid JSON throws `JsonException`, and
 JSON null fails the response expectation. Buffered content remains readable for
 multiple assertions/extractions. These migration details stay in this plan.
@@ -147,13 +149,14 @@ and reproducible tooling are migration cleanups, not newly introduced .NET 10 AP
 
 ## Additional quick wins proposed
 
-These are recommendations, not completed features or approved public API designs.
+Q1 was approved and implemented in the JSON host inheritance follow-up below.
+Q2-Q5 remain recommendations, not completed features or approved public API designs.
 Effort is relative: small means a focused implementation with regression tests;
 medium means several related APIs or lifetime behavior must be reviewed together.
 
 | Priority | Change and location | Benefit / acceptance check | Effort and decision |
 | --- | --- | --- | --- |
-| Q1 | Consistent JSON options in `BODY<T>` and `RESPONSE_BODY<T>` as well as extraction | A caller's naming policy and string-enum converters work in requests, expectations and extraction; existing defaults remain unchanged | Small; agree overloads or a scenario-level configuration object before implementation |
+| Q1 | Consistent inherited JSON options across requests, assertions, retry checks and extraction | Real Minimal API/MVC converter round trips, per-call overrides, chaining and host isolation | Implemented with the approved MVC-first precedence; standalone responses retain web defaults |
 | Q2 | Cancellation-aware JSON reads in `HttpResponseMessageExtensions` | Cancellation interrupts pending content reads while repeated reads still work; retain existing overloads | Small; agree new overload signatures. Full scenario cancellation also needs callback propagation in N1 |
 | Q3 | Opt-in strict JSON contract checks using .NET 9 nullable/required-constructor flags and .NET 10 duplicate-property rejection | Missing required values, explicit nulls and duplicate properties can fail contract tests | Small coverage/sample follow-up after Q1; keep web defaults. User decides whether a convenience preset is useful; `JsonSerializerOptions.Strict` also changes casing and must not silently replace web behavior |
 | Q4 | Cache reflected public-member metadata in `StructuralComparison` | Repeated comparisons reuse discovery; all comparison semantics and paths stay identical; measure repeated large collections before/after | Small, internal implementation; do after correctness review, without adding a cache for mutable comparison results |
@@ -182,7 +185,7 @@ approvals; ask the user before implementing the affected contract.
 | --- | --- | --- | --- |
 | N1 | Fix retry limits/cancellation and use injectable TimeProvider; complete Q2 | Recommend `maxNumberOfRetries` means additional attempts (zero = one send), false on the final check fails, and only explicitly retryable exceptions are retried. Agree exception policy and timeout diagnostics | Bounded false/throw paths, no delay after success, immediate cancellation, deterministic time tests, retained final diagnostics |
 | N2 | Define client/request/response/host ownership; add async disposal | Agree who owns a supplied client and factory, how callers release returned responses, and whether recorded calls retain live responses or snapshots | Caller-owned resources survive; owned resources dispose once; cleanup failures remain observable; diagnostics still work after failed attempts |
-| N3 | Expose a host-independent HTTP entry point using client creation; complete Q1 | Agree public names and whether N2 ownership is explicit in options/factories | Existing WebApplicationFactory scenarios still work; identical scenarios work with externally configured HttpClient creation; xUnit v3 tests pass |
+| N3 | Expose a host-independent HTTP entry point using client creation | Agree public names and whether N2 ownership is explicit in options/factories | Existing WebApplicationFactory scenarios still work; identical scenarios work with externally configured HttpClient creation; xUnit v3 tests pass |
 | N4 | Generic Host adapter for DI/service scenarios | Owned vs externally started hosts; per-scenario vs per-step DI scope; same package vs optional adapter | Async start/stop, scope disposal and cancellation; non-HTTP worker/service test; existing HTTP behavior retained |
 | N5 | Aspire AppHost integration sample on the N3 boundary | Recommend a sample first; decide whether a reusable Ogooreck.Aspire package is warranted after the sample | Build/start real AppHost, bounded health readiness, named-resource HttpClient, sequential scenario, failure diagnostics and cleanup |
 | N6 | Release follow-ups: stable .NET 11 targeting, packaging and optional MTP | .NET 11 after GA already authorized; release number/package split and solution-wide runner change remain user decisions | net10/net11 build/test matrix, package inspection, xUnit v3/FsCheck compatibility retained; MTP remains a separate runner decision |
@@ -200,7 +203,9 @@ The details below explain the implementation boundaries for those stages.
    Agree how response/retry callbacks receive cancellation without silently
    replacing the public `ResponseAssert` and `RetryCheck` delegates.
 2. **Decouple HTTP scenarios from WebApplicationFactory.** Existing builders
-   already accept `Func<HttpClient>`. Introduce a host-independent entry point
+   already accept `Func<HttpClient>`; JSON resolution now independently accepts
+   `IServiceProvider` and is tested with Generic Host services. Introduce a public
+   host-independent entry point
    around client creation while preserving `ApiSpecification<TProgram>` as an
    adapter. Agree API names and client ownership before implementation: builders
    currently dispose every created client, so accepting shared clients needs an
@@ -230,6 +235,152 @@ The details below explain the implementation boundaries for those stages.
 7. **Add .NET 11 after general release.** User authorized supporting both .NET 10
    and .NET 11 once the stable release is available. Recheck SDK and ASP.NET package
    versions, multi-target the library/tests, and run both frameworks in CI.
+
+## Open GitHub issues reviewed on 2026-11-04
+
+Reviewed all nine open issues and their acceptance criteria (none currently has
+comments). The user accepted the proposed delivery order. Issue #23 was closed
+as completed after confirming that GitHub main contains the fix. Other closure
+recommendations and public API proposals still require the user's decision.
+
+| Issue | Current evidence | Recommendation / remaining work |
+| --- | --- | --- |
+| [#23: ThenThrows passes without an exception](https://github.com/oskardudycz/Ogooreck/issues/23) | Fixed in the migration: missing exceptions throw AssertionException; regression coverage also checks the matching exception, a different exception and callback failure | Closed as completed on 2026-11-04 |
+| [#22: Different request/response JSON serializers](https://github.com/oskardudycz/Ogooreck/issues/22) | Requests and responses now both use System.Text.Json; both GetResultFromJson overloads accept converter options | Implemented locally: BODY, RESPONSE_BODY, RESPONSE_BODY_MATCHES and extraction inherit host settings and accept per-call options. Real converter round trips cover the use case. Keep open until this change is merged/published |
+| [#19: System.Text.Json support](https://github.com/oskardudycz/Ogooreck/issues/19) | Serializer replacement is complete, including standard constructors and web defaults | Implemented locally: host settings are inherited automatically using the approved MVC-first precedence, with per-call overrides for different endpoints. Keep open until this change is merged/published |
+| [#21: Form-data requests](https://github.com/oskardudycz/Ogooreck/issues/21) | A custom RequestTransform can already assign MultipartFormDataContent or FormUrlEncodedContent to request.Content; BODY is JSON-only | Keep open. A focused multipart upload/field scenario could prove the existing extension point without a new API. Decide whether a helper is wanted and whether it covers multipart, URL-encoded forms or both; agree ownership before accepting reusable content instances |
+| [#20: Business-logic TestContext](https://github.com/oskardudycz/Ogooreck/issues/20) | TestContext remains confined to the API namespace; business-logic builders expose state/events and callbacks | Not implemented. The issue has no body: agree what the context records/exposes and which callbacks receive it before designing an API |
+| [#18: Problem Details and error messages](https://github.com/oskardudycz/Ogooreck/issues/18) | Generic JSON extraction can deserialize a caller's DTO, but no dedicated Problem Details assertion or enriched HTTP failure diagnostics exists | Not implemented. Decide helpers/fields and failure-message behavior, including whether response detail/extensions can appear in diagnostics |
+| [#4: NuGet logo](https://github.com/oskardudycz/Ogooreck/issues/4) | No tracked logo asset or active PackageIcon; the old PackageIconUrl is commented out | Not implemented. Small packaging follow-up once the user selects an image; embed it and inspect the nupkg metadata |
+| [#3: API tests for README examples](https://github.com/oskardudycz/Ogooreck/issues/3) | Existing API tests cover basic GET/POST and the migration adds register/read chaining; other README API examples remain handwritten and untested | Partly addressed. Add executable examples in the existing API test project and regenerate their snippets. Cover Given/context, chaining, fixtures and eventual consistency; retry examples depend on N1's contract decision |
+| [#2: XML documentation comments](https://github.com/oskardudycz/Ogooreck/issues/2) | XML output is enabled, but almost all existing public APIs still suppress CS1591 and have no comments | Not implemented. Document behavior after the relevant API decisions, remove suppressions from completed areas and inspect packaged XML |
+
+Delivery order: #23 closed; implement and verify the approved Q1 / host-settings
+policy for #22/#19;
+verify multipart support for #21; extend executable API snippets for #3. The
+logo is an independent small task after asset selection. Context and Problem
+Details need user decisions before implementation; XML documentation should
+describe those agreed contracts.
+
+## JSON host inheritance: requirements and research
+
+The user requires automatic inheritance from the tested API settings, with
+optional per-call overrides, and requested an API proposal before implementation.
+No scenario source-selection API is wanted. On 2026-11-04 the user approved the
+existing-helper API and MVC-first precedence described below, and requested preparation
+for IHost/Aspire as part of implementation.
+Research checked on 2026-11-04:
+
+| Tool / source revision | Actual behavior | Implication for Ogooreck |
+| --- | --- | --- |
+| [Alba host](https://github.com/JasperFx/alba/blob/bb576a745925d790c10542a1c216dc19dd3e96d9/src/Alba/AlbaHost.cs), [MVC strategy](https://github.com/JasperFx/alba/blob/bb576a745925d790c10542a1c216dc19dd3e96d9/src/Alba/Serialization/FormatterSerializer.cs), [Minimal API strategy](https://github.com/JasperFx/alba/blob/bb576a745925d790c10542a1c216dc19dd3e96d9/src/Alba/Serialization/SystemTextJsonSerializer.cs) | Builds two strategies. MVC reuses configured input/output formatters; Minimal API reads IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>.Value.SerializerOptions, falling back to web defaults. Default selects MVC when matching formatters exist, otherwise Minimal API | Inheritance is established from the running host; MVC and Minimal API settings remain distinct. Ogooreck's scope stays System.Text.Json, rather than reproducing Alba's formatter abstraction and Newtonsoft support |
+| [Alba request selection](https://github.com/JasperFx/alba/blob/bb576a745925d790c10542a1c216dc19dd3e96d9/src/Alba/Scenario.cs), [response reads](https://github.com/JasperFx/alba/blob/bb576a745925d790c10542a1c216dc19dd3e96d9/src/Alba/ScenarioResult.cs), [docs](https://jasperfx.github.io/alba/scenarios/json.html) | Request helpers accept JsonStyle.Mvc or JsonStyle.MinimalApi for mixed hosts. ReadAsJson/ReadAsJsonAsync use the host default, without that override parameter | Alba's explicit request style is research context, not an approved Ogooreck API. Ogooreck must automatically inherit the API settings for requests, assertions and extraction |
+| [FastEndpoints startup](https://github.com/FastEndpoints/FastEndpoints/blob/59d3cbfa32afc62ba773caed77ac89c35c1221a8/Src/Library/Main/MainExtensions.cs), [client helpers](https://github.com/FastEndpoints/FastEndpoints/blob/59d3cbfa32afc62ba773caed77ac89c35c1221a8/Src/Library/Testing/HttpClientExtensions.cs), [configuration](https://github.com/FastEndpoints/FastEndpoints/blob/59d3cbfa32afc62ba773caed77ac89c35c1221a8/Src/Library/Config/Config.cs) | Copies HTTP JsonOptions during serializer initialization into static configuration, then applies application configuration. Client helpers use those settings for requests and a copy for response reads, including its test-specific unmapped-member policy | Reusing application converters is useful; Ogooreck needs scenario/host isolation for different factories running concurrently |
+| [.NET 10 HttpClient JSON helpers](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.json.httpclientjsonextensions.postasjsonasync?view=net-10.0), [response JSON source](https://github.com/dotnet/runtime/blob/v10.0.0/src/libraries/System.Net.Http.Json/src/System/Net/Http/Json/HttpContentJsonExtensions.cs) | Use explicit options or JsonSerializerOptions.Web; HttpClient/HttpContent alone do not resolve host DI settings | A bare HttpResponseMessage requires explicit options unless associated with an Ogooreck result/context. Do not claim automatic inheritance on a detached response |
+
+Implementation review on 2026-11-04 compared the changed resolver and helper
+integration with the three pinned host/serializer sources above. No copied
+implementation was identified. Research informed the MVC-first precedence;
+the implementation reads public ASP.NET Core options directly and extends
+Ogooreck's existing TestContext, BODY, RESPONSE_BODY, RESPONSE_BODY_MATCHES and
+Result APIs. It introduces no third-party serializer strategies, formatter
+execution pipeline or scenario model. Naming follows the existing records,
+camelCase private fields and uppercase scenario helpers. All comments added
+in this change have been removed at the user's request.
+
+Required behavior:
+
+- Existing BODY, response assertions and result extraction automatically inherit
+  the tested API's configured System.Text.Json settings. The caller must not
+  select MVC or Minimal API settings in Given or configure a scenario source.
+- Optional per-call JsonSerializerOptions overrides apply to that operation
+  only. They must not modify the application's options or subsequent operations.
+- Preserve inheritance across Given/When requests, response expectations, retry
+  checks, result extraction and AndWhen chaining, with isolation between hosts.
+- Do not introduce a JsonSettingsSource enum or Given selection overload.
+- Use the approved precedence for mixed hosts: MVC when matching JSON
+  input/output formatters exist, otherwise HTTP JSON settings. Per-call options
+  cover operations whose endpoint uses different settings.
+- Establish the limits for detached HttpResponseMessage extraction and
+  endpoint-local serializer overrides from source/docs before proposing the API.
+- API and mixed-host policy approved. Implement within existing projects, keeping
+  endpoint-local and detached-response limitations explicit in this plan.
+
+Approved implementation:
+
+1. Lazily resolve JSON settings from the running WebApplicationFactory.Services
+   when a JSON helper first runs, before serializing/deserializing its value. Keep
+   this internal; existing Setup(factory), Given() and When() calls remain sufficient.
+2. For MVC, read the configured System.Text.Json input/output formatter settings;
+   for Minimal APIs, read IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>.
+   Use the appropriate request/response options without modifying host settings.
+3. Pass access to these host settings through the existing context to BODY,
+   RESPONSE_BODY, RESPONSE_BODY_MATCHES, Result.GetResultFromJson and
+   GetResponseBody. Preserve it across chained steps. In particular, fix
+   GetResponseBody's current mapping through a bare HttpResponseMessage, which
+   discards access to the host context.
+4. Add optional per-operation options overloads, retaining existing calls:
+
+   ```csharp
+   await api.Given()
+       .When(POST, URI("/items"), BODY(request))
+       .Then(OK, RESPONSE_BODY(expected))
+       .GetResponseBody<Item>();
+
+   // Only explicit overrides require options:
+   BODY(request, options);
+   RESPONSE_BODY(expected, options);
+   RESPONSE_BODY_MATCHES<Item>(predicate, options);
+   // ...GetResponseBody<Item>(options)
+   ```
+
+Approved mixed-host policy: a mixed MVC/Minimal API host can have conflicting settings.
+Use MVC options when matching JSON formatters exist, otherwise HTTP JSON settings.
+This precedence avoids a new source-selection API,
+but does not automatically follow each endpoint in a mixed host. The user
+approved this policy on 2026-11-04. Do not describe it as endpoint-aware
+inheritance. ASP.NET Core's MatcherFactory and Matcher are internal in .NET 10;
+do not use reflection or invent URL matching to infer the endpoint. Checked:
+[MatcherFactory](https://github.com/dotnet/aspnetcore/blob/v10.0.0/src/Http/Routing/src/Matching/MatcherFactory.cs),
+[Matcher](https://github.com/dotnet/aspnetcore/blob/v10.0.0/src/Http/Routing/src/Matching/Matcher.cs).
+Endpoint-local JsonResult / Results.Json options are separate overrides, not
+host-wide settings. A detached HttpResponseMessage cannot resolve host DI by
+itself; preserve the existing explicit-options overload for that case.
+
+Implemented acceptance tests in the existing projects: real Minimal API and MVC
+converter round trips, deliberately different settings in one mixed host,
+per-call override isolation, request/response/assertion/retry/extraction/chaining
+consistency, concurrent hosts with conflicting converters, default settings,
+and repeated body reads. Add executable snippets only for changed APIs, and
+regenerate README through MarkdownSnippets. Do not expand unrelated public
+documentation. Verification: `./build.sh test pack` passes 157 tests with zero
+build warnings/errors; `./build.sh docs` regenerates the existing snippets with
+no README changes. The NuGet package retains its single MVC Testing dependency.
+
+### IHost / Aspire preparation in this change
+
+The user requested preparation, without requiring a full integration. Keep JSON
+settings resolution host-independent: accept an IServiceProvider and return
+separate request/response options. TestContext carries a lazy settings resolver;
+WebApplicationFactory supplies its running Services. Builders retain their existing
+Func<HttpClient> boundary, so serialization and scenario execution do not depend
+on WebApplicationFactory. Add no Aspire dependency or new project in this change.
+
+The resolver is verified with IHost.Services in a Generic Host regression test. A public
+host-independent entry point, client/host ownership, async lifecycle and scoped
+service scenarios remain the N2-N4 API decisions. Propose those contracts before
+adding them; an IHost does not inherently provide an HTTP client or API endpoint.
+
+Aspire's named-resource CreateHttpClient fits the existing client factory boundary,
+but the tested resources run in separate processes. AppHost.Services is not the
+API resource's service provider, so it cannot supply that resource's JSON settings.
+For N5, start with a sample using explicit shared API options/contracts for remote
+requests and responses; agree how those options are supplied at the future public
+entry point. Do not claim automatic remote DI inheritance. Readiness, cancellation,
+resource/client ownership and failure diagnostics remain part of that adapter work.
+Sources: [IHost and Services](https://learn.microsoft.com/en-us/dotnet/core/extensions/generic-host),
+[Aspire resources and clients](https://aspire.dev/testing/accessing-resources/),
+[Aspire process isolation](https://learn.microsoft.com/en-us/dotnet/aspire/testing/overview).
 
 ## References checked
 

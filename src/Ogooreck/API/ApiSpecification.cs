@@ -46,7 +46,7 @@ public class ApiSpecification<TProgram>: IDisposable where TProgram : class
 
     public GivenApiSpecificationBuilder Given(
         ApiTestStep[] builders) =>
-        new(new TestContext(), createClient, builders);
+        new(new TestContext(() => ApiJsonSettings.FromServices(applicationFactory.Services)), createClient, builders);
 
     public async Task<ApiSpecification.Result> Scenario(
         Task<ApiSpecification.Result> first,
