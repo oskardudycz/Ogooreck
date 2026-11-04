@@ -1,50 +1,37 @@
-﻿using static Bullseye.Targets;
+using static Bullseye.Targets;
 using static SimpleExec.Command;
 
-const string framework = "net8.0";
+const string framework = "net10.0";
 const string configuration = "Release";
 
-Target("default", DependsOn("compile"));
+Target("default", dependsOn: ["compile"]);
 
 Target("clean", () =>
     EnsureDirectoriesDeleted("results", "artifacts"));
 
-Target("compile", DependsOn("clean"), () =>
-    Run("dotnet",  $"build src/Ogooreck.sln --framework {framework} --configuration {configuration}"));
+Target("compile", dependsOn: ["clean"], () =>
+    Run("dotnet", $"build src/Ogooreck.slnx --configuration {configuration}"));
 
-Target("test-sample-api", DependsOn("compile"), () =>
+Target("test-sample-api", dependsOn: ["compile"], () =>
     RunTests("Ogooreck.Sample.Api.Tests"));
 
-Target("test", DependsOn("test-sample-api"));
+Target("test-business-logic", dependsOn: ["compile"], () => RunTests("Ogooreck.Sample.BusinessLogic.Tests"));
+Target("test-fsharp", dependsOn: ["compile"], () => RunTests("Ogooreck.Sample.BusinessLogic.FSharp.Tests", "fsproj"));
+Target("test-library", dependsOn: ["compile"], () => RunTests("Ogooreck.Tests"));
 
-Target("pack", DependsOn("compile"), ForEach("./src/Ogooreck"), project =>
+Target("test", dependsOn: ["test-sample-api", "test-business-logic", "test-fsharp", "test-library"]);
+
+Target("pack", dependsOn: ["compile"], forEach: ["./src/Ogooreck"], project =>
     Run("dotnet", $"pack {project} -o ./artifacts --configuration Release"));
 
-Target("install-mdsnippets", IgnoreIfFailed(() =>
-    Run("dotnet", $"tool install -g MarkdownSnippets.Tool")
-));
+Target("restore-tools", () => Run("dotnet", "tool restore"));
 
-Target("docs", DependsOn("install-mdsnippets"), () => {
-    // Run docs site
-    Run("mdsnippets");
-});
+Target("docs", dependsOn: ["restore-tools"], () => Run("dotnet", "tool run mdsnippets"));
 
 await RunTargetsAndExitAsync(args);
 
-static void RunTests(string projectName, string directoryName = "src") =>
-    Run("dotnet", $"test --no-build --no-restore --configuration {configuration} --framework {framework} {directoryName}/{projectName}/{projectName}.csproj");
-
-Action IgnoreIfFailed(Action action) => () =>
-{
-    try
-    {
-        action();
-    }
-    catch (Exception exception)
-    {
-        Console.WriteLine(exception.Message);
-    }
-};
+static void RunTests(string projectName, string extension = "csproj") =>
+    Run("dotnet", $"test --no-build --no-restore --configuration {configuration} --framework {framework} src/{projectName}/{projectName}.{extension}");
 
 static void EnsureDirectoriesDeleted(params string[] paths)
 {

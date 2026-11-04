@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using FluentAssertions;
+using Ogooreck.Assertions;
 
 namespace Ogooreck.API;
 
@@ -95,26 +95,34 @@ public static class ApiSpecification
     public static Action<HttpRequestHeaders> IF_MATCH(object ifMatch, bool isWeak = true) =>
         IF_MATCH(ifMatch.ToString()!, isWeak);
 
-    public static Task<HttpResponseMessage> And(this Task<Result> result,
+    public static async Task<HttpResponseMessage> And(this Task<Result> result,
         Func<HttpResponseMessage, HttpResponseMessage> and) =>
-        result.ContinueWith(t => and(t.Result.Response));
+        and((await result).Response);
 
-    public static Task And(this Task<Result> result, Func<HttpResponseMessage, Task> and) =>
-        result.ContinueWith(t => and(t.Result.Response));
+    public static async Task And(this Task<Result> result, Func<HttpResponseMessage, Task> and) =>
+        await and((await result).Response);
 
-    public static Task And<TResult>(this Task<Result> result,
+    public static async Task And<TResult>(this Task<Result> result,
         Func<HttpResponseMessage, Task<TResult>> and) =>
-        result.ContinueWith(t => and(t.Result.Response));
+        await and((await result).Response);
 
-    public static Task And(this Task<Result> result, Func<Task> and) =>
-        result.ContinueWith(_ => and());
+    public static async Task And(this Task<Result> result, Func<Task> and)
+    {
+        await result;
+        await and();
+    }
 
-    public static Task And(this Task<Result> result, Task and) =>
-        result.ContinueWith(_ => and);
+    public static async Task And(this Task<Result> result, Task and)
+    {
+        await result;
+        await and;
+    }
 
-    public static Task<GivenApiSpecificationBuilder> And(this Task<Result> result) =>
-        result.ContinueWith(
-            _ => new GivenApiSpecificationBuilder(result.Result.TestContext, result.Result.CreateClient));
+    public static async Task<GivenApiSpecificationBuilder> And(this Task<Result> result)
+    {
+        var previous = await result;
+        return new GivenApiSpecificationBuilder(previous.TestContext, previous.CreateClient);
+    }
 
     public static Task<WhenApiSpecificationBuilder> AndWhen(
         this Task<Result> result,
@@ -126,73 +134,75 @@ public static class ApiSpecification
     public static Task<WhenApiSpecificationBuilder> AndWhen(this Task<Result> result, params RequestTransform[] when) =>
         result.And().When(when);
 
-    public static Task<WhenApiSpecificationBuilder> AndWhen(
+    public static async Task<WhenApiSpecificationBuilder> AndWhen(
         this Task<Result> result,
         string description,
         Func<HttpResponseMessage, RequestTransform[]> when
-    ) =>
-        result.ContinueWith(r =>
-            new GivenApiSpecificationBuilder(r.Result.TestContext, r.Result.CreateClient)
-                .When(description, when(r.Result.Response))
-        );
+    )
+    {
+        var previous = await result;
+        return new GivenApiSpecificationBuilder(previous.TestContext, previous.CreateClient)
+            .When(description, when(previous.Response));
+    }
 
-    public static Task<WhenApiSpecificationBuilder> AndWhen(
+    public static async Task<WhenApiSpecificationBuilder> AndWhen(
         this Task<Result> result,
         Func<HttpResponseMessage, RequestTransform[]> when
-    ) =>
-        result.ContinueWith(r =>
-            new GivenApiSpecificationBuilder(r.Result.TestContext, r.Result.CreateClient).When(when(r.Result.Response))
-        );
+    )
+    {
+        var previous = await result;
+        return new GivenApiSpecificationBuilder(previous.TestContext, previous.CreateClient).When(when(previous.Response));
+    }
 
-    public static Task<WhenApiSpecificationBuilder> When(
+    public static async Task<WhenApiSpecificationBuilder> When(
         this Task<GivenApiSpecificationBuilder> result,
         string description,
         params RequestTransform[] when
     ) =>
-        result.ContinueWith(_ => result.Result.When(description, when));
+        (await result).When(description, when);
 
-    public static Task<WhenApiSpecificationBuilder> When(
+    public static async Task<WhenApiSpecificationBuilder> When(
         this Task<GivenApiSpecificationBuilder> result,
         params RequestTransform[] when
     ) =>
-        result.ContinueWith(_ => result.Result.When(when));
+        (await result).When(when);
 
-    public static Task<WhenApiSpecificationBuilder> Until(
+    public static async Task<WhenApiSpecificationBuilder> Until(
         this Task<WhenApiSpecificationBuilder> when,
         RetryCheck check,
         int maxNumberOfRetries = 5,
         int retryIntervalInMs = 1000
     ) =>
-        when.ContinueWith(t => t.Result.Until(check, maxNumberOfRetries, retryIntervalInMs));
+        (await when).Until(check, maxNumberOfRetries, retryIntervalInMs);
 
-    public static Task<Result> Then(
+    public static async Task<Result> Then(
         this Task<WhenApiSpecificationBuilder> when,
         ResponseAssert then
     ) =>
-        when.ContinueWith(t => t.Result.Then(then)).Unwrap();
+        await (await when).Then(then);
 
-    public static Task<Result> Then(
+    public static async Task<Result> Then(
         this Task<WhenApiSpecificationBuilder> when,
         params ResponseAssert[] thens
     ) =>
-        when.ContinueWith(t => t.Result.Then(thens)).Unwrap();
+        await (await when).Then(thens);
 
-    public static Task<Result> Then(
+    public static async Task<Result> Then(
         this Task<WhenApiSpecificationBuilder> when,
         IEnumerable<ResponseAssert> thens,
         CancellationToken ct
     ) =>
-        when.ContinueWith(t => t.Result.Then(thens, ct), ct).Unwrap();
+        await (await when.WaitAsync(ct)).Then(thens, ct);
 
 
     public static Task<T> GetResponseBody<T>(this Task<Result> result) => result.Map(RESPONSE_BODY<T>());
     public static Task<T> GetCreatedId<T>(this Task<Result> result) => result.Map(CREATED_ID<T>());
 
-    public static Task<T> Map<T>(
+    public static async Task<T> Map<T>(
         this Task<Result> result,
         Func<HttpResponseMessage, Task<T>> map
     ) =>
-        result.ContinueWith(t => map(t.Result.Response)).Unwrap();
+        await map((await result).Response);
 
     ///////////////////
     ////   THEN    ////
@@ -213,7 +223,7 @@ public static class ApiSpecification
     public static ResponseAssert HTTP_STATUS(HttpStatusCode status) =>
         (response, ctx) =>
         {
-            response.StatusCode.Should().Be(status);
+            Expect.Equal(response.StatusCode, status, "HTTP status");
             return ValueTask.CompletedTask;
         };
 
@@ -228,10 +238,10 @@ public static class ApiSpecification
         };
 
     public static ResponseAssert RESPONSE_BODY<T>(T body) =>
-        RESPONSE_BODY<T>(result => result.Should().BeEquivalentTo(body));
+        RESPONSE_BODY<T>(result => Expect.Equivalent(result, body, "Response body"));
 
     public static ResponseAssert RESPONSE_BODY<T>(Func<TestContext, T> getBody) =>
-        RESPONSE_BODY<T>((result, ctx) => result.Should().BeEquivalentTo(getBody(ctx)));
+        RESPONSE_BODY<T>((result, ctx) => Expect.Equivalent(result, getBody(ctx), "Response body"));
 
     public static ResponseAssert RESPONSE_BODY<T>(Action<T> assert) =>
         RESPONSE_BODY<T>((body, _) => assert(body));
@@ -241,8 +251,6 @@ public static class ApiSpecification
         {
             var result = await response.GetResultFromJson<T>();
             assert(result, ctx);
-
-            result.Should().BeEquivalentTo(result);
         };
 
     public static Func<HttpResponseMessage, Task<T>> RESPONSE_BODY<T>() =>
@@ -254,12 +262,10 @@ public static class ApiSpecification
     public static ResponseAssert RESPONSE_ETAG_HEADER(object eTag, bool isWeak = true) =>
         RESPONSE_HEADERS(headers =>
         {
-            headers.ETag.Should().NotBeNull("ETag response header should be defined").And
-                .NotBe("", "ETag response header should not be empty");
-            headers.ETag!.Tag.Should().NotBeEmpty("ETag response header should not be empty");
-
-            headers.ETag.IsWeak.Should().Be(isWeak, "Etag response header should be {0}", isWeak ? "Weak" : "Strong");
-            headers.ETag.Tag.Should().Be($"\"{eTag}\"");
+            Expect.That(headers.ETag is not null, "ETag response header should be defined.");
+            Expect.That(!string.IsNullOrEmpty(headers.ETag.Tag), "ETag response header should not be empty.");
+            Expect.Equal(headers.ETag.IsWeak, isWeak, "ETag weakness");
+            Expect.Equal(headers.ETag.Tag, $"\"{eTag}\"", "ETag value");
         });
 
     public static ResponseAssert RESPONSE_LOCATION_HEADER(string? locationHeaderPrefix = null) =>
@@ -269,11 +275,14 @@ public static class ApiSpecification
 
             var locationHeader = response.Headers.Location;
 
-            locationHeader.Should().NotBeNull();
+            Expect.That(locationHeader is not null, "Location response header should be defined.");
 
             var location = locationHeader!.ToString();
 
-            location.Should().StartWith(locationHeaderPrefix ?? response.RequestMessage!.RequestUri!.AbsolutePath);
+            var prefix = locationHeaderPrefix ?? response.RequestMessage?.RequestUri?.AbsolutePath;
+            Expect.That(prefix is not null, "A request URI or explicit Location prefix is required.");
+            Expect.That(location.StartsWith(prefix, StringComparison.Ordinal),
+                $"Expected Location <{location}> to start with <{prefix}>.");
         };
 
     public static ResponseAssert RESPONSE_HEADERS(params Action<HttpResponseHeaders>[] headers) =>
@@ -312,7 +321,6 @@ public static class ApiSpecification
             response.EnsureSuccessStatusCode();
 
             var result = await response.GetResultFromJson<TBody>();
-            result.Should().NotBeNull();
 
             return assert(result);
         };

@@ -1,4 +1,4 @@
-using FluentAssertions;
+// begin-snippet: StateBasedShoppingCartTests
 using Ogooreck.BusinessLogic;
 using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Pricing;
 using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Products;
@@ -12,7 +12,8 @@ public class ShoppingCartTests
 {
     private readonly Random random = new();
 
-    private readonly HandlerSpecification<ShoppingCart> Spec = Specification.For<ShoppingCart>();
+    private readonly HandlerSpecification<ShoppingCart> Spec =
+        Specification.For<ShoppingCart>();
 
     private class DummyProductPriceCalculator: IProductPriceCalculator
     {
@@ -20,12 +21,14 @@ public class ShoppingCartTests
 
         public DummyProductPriceCalculator(decimal price) => this.price = price;
 
-        public IReadOnlyList<PricedProductItem> Calculate(params ProductItem[] productItems) =>
-            productItems.Select(pi => PricedProductItem.For(pi, price)).ToList();
+        public IReadOnlyList<PricedProductItem> Calculate(
+            params ProductItem[] productItems) =>
+            productItems.Select(pi => PricedProductItem.For(pi, price))
+                .ToList();
     }
 
     [Fact]
-    public void GivenNonExistingShoppingCart_WhenOpenWithValidParams_ThenSucceeds()
+    public void GivenMissingCart_WhenOpen_ThenSucceeds()
     {
         var shoppingCartId = Guid.NewGuid();
         var clientId = Guid.NewGuid();
@@ -34,16 +37,16 @@ public class ShoppingCartTests
             .When(() => ShoppingCart.Open(shoppingCartId, clientId))
             .Then((state, _) =>
             {
-                state.Id.Should().Be(shoppingCartId);
-                state.ClientId.Should().Be(clientId);
-                state.ProductItems.Should().BeEmpty();
-                state.Status.Should().Be(ShoppingCartStatus.Pending);
-                state.TotalPrice.Should().Be(0);
+                Assert.Equal(shoppingCartId, state.Id);
+                Assert.Equal(clientId, state.ClientId);
+                Assert.Empty(state.ProductItems);
+                Assert.Equal(ShoppingCartStatus.Pending, state.Status);
+                Assert.Equal(0, state.TotalPrice);
             });
     }
 
     [Fact]
-    public void GivenOpenShoppingCart_WhenAddProductWithValidParams_ThenSucceeds()
+    public void GivenOpenCart_WhenAddProduct_ThenSucceeds()
     {
         var shoppingCartId = Guid.NewGuid();
 
@@ -55,8 +58,10 @@ public class ShoppingCartTests
             .When(cart => cart.AddProduct(priceCalculator, productItem))
             .Then((state, _) =>
             {
-                state.ProductItems.Should().NotBeEmpty();
-                state.ProductItems.Single().Should().Be(PricedProductItem.For(productItem, price));
+                Assert.NotEmpty(state.ProductItems);
+                Assert.Equal(
+                    PricedProductItem.For(productItem, price),
+                    state.ProductItems.Single());
             });
     }
 }
@@ -78,3 +83,4 @@ public static class ProductItemBuilder
     public static ProductItem ValidProductItem() =>
         ProductItem.From(Guid.NewGuid(), Random.Next(1, 100));
 }
+// end-snippet

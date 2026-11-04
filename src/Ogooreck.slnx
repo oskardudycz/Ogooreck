@@ -1,0 +1,24 @@
+<Solution>
+  <Folder Name="/build/">
+    <File Path="../.github/workflows/build.dotnet.yml" />
+    <File Path="../.github/workflows/publish-nuget.yml" />
+    <File Path="../build.cmd" />
+    <File Path="../build.ps1" />
+    <File Path="../build.sh" />
+    <File Path="Directory.Build.props" />
+    <Project Path="Ogooreck.Build/Ogooreck.Build.csproj" />
+  </Folder>
+  <Folder Name="/docs/">
+    <File Path="../mdsnippets.json" />
+    <File Path="../README.md" />
+  </Folder>
+  <Folder Name="/docs/mdsource/">
+    <File Path="../mdsource/README.source.md" />
+  </Folder>
+  <Project Path="Ogooreck.Sample.Api.Tests/Ogooreck.Sample.Api.Tests.csproj" />
+  <Project Path="Ogooreck.Sample.Api/Ogooreck.Sample.Api.csproj" />
+  <Project Path="Ogooreck.Sample.BusinessLogic.FSharp.Tests/Ogooreck.Sample.BusinessLogic.FSharp.Tests.fsproj" />
+  <Project Path="Ogooreck.Sample.BusinessLogic.Tests/Ogooreck.Sample.BusinessLogic.Tests.csproj" />
+  <Project Path="Ogooreck.Tests/Ogooreck.Tests.csproj" />
+  <Project Path="Ogooreck/Ogooreck.csproj" />
+</Solution>

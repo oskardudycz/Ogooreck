@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
     </PropertyGroup>
 
     <ItemGroup>
@@ -9,23 +11,24 @@
         <Compile Include="Deciders\BankAccount.fs" />
         <Compile Include="Deciders\BankAccountDecider.fs" />
         <Compile Include="Deciders\BankAccountTests.fs" />
+        <Compile Include="ComparisonTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="FsCheck" Version="2.16.6" />
-        <PackageReference Include="FsCheck.Xunit" Version="2.16.6" />
+        <PackageReference Include="FsCheck" Version="3.6.0" />
+        <PackageReference Include="FsCheck.Xunit.v3" Version="3.6.0" />
         <PackageReference Include="FSharp.UMX" Version="1.1.0" />
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
-        <PackageReference Include="xunit" Version="2.8.0" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.0">
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+        <PackageReference Include="xunit.v3.mtp-off" Version="4.0.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="coverlet.collector" Version="6.0.2">
+        <PackageReference Include="coverlet.collector" Version="10.1.0">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Update="FSharp.Core" Version="8.0.200" />
+        <PackageReference Update="FSharp.Core" Version="11.0.100" />
     </ItemGroup>
 
     <ItemGroup>
