@@ -73,7 +73,7 @@ public static class HttpResponseMessageExtensions
         this ApiSpecification.Result result,
         JsonSerializerOptions? options = null
     ) =>
-        result.Response.GetResultFromJson<T>(options);
+        result.Response.GetResultFromJson<T>(options ?? result.TestContext.JsonSettings.Response);
 
 
     public static async Task<T> GetResultFromJson<T>(

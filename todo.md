@@ -86,7 +86,7 @@ v3; it is regenerated with MarkdownSnippets. No migration prose is added.
 
 - [x] Expand plan.md with completed quick wins, Q1-Q5 proposals, N1-N6 stages,
   user decision points, acceptance checks and official documentation references.
-- [ ] Q1: agree and implement consistent JSON configuration across helpers.
+- [x] Q1: implement approved automatic host JSON inheritance and per-call options.
 - [ ] Q2: agree and implement cancellation-aware JSON reads.
 - [ ] Q3: decide whether strict JSON needs a convenience preset; retain web defaults.
 - [ ] Q4: measure and cache comparison member metadata if worthwhile.
@@ -97,6 +97,60 @@ v3; it is regenerated with MarkdownSnippets. No migration prose is added.
 - [ ] N4: agree host/scope ownership and deliver a Generic Host adapter.
 - [ ] N5: deliver an Aspire sample; decide whether an adapter package is needed.
 - [ ] N6: add .NET 11 after GA; decide release/package/runner changes separately.
+
+## GitHub issue review (2026-11-04)
+
+- [x] Read all nine open issue bodies and check for additional discussion (none).
+- [x] Map each issue to implementation, regression coverage and remaining work
+  in plan.md.
+- [x] Rerun focused exception/JSON tests: 10 passed, zero failed.
+- [x] Confirm #23 is fixed and covered by regression tests.
+- [x] Close #23 as completed after user acceptance and verification that its fix
+  is on GitHub main (0755af9). No issue comments added.
+- [x] Implement #22/#19 locally: inherited host JSON settings and per-call options.
+- [ ] Close #22/#19 after this implementation is merged/published.
+- [ ] Verify #21 with multipart/field tests; decide whether to add a helper.
+- [ ] Complete #3 with executable API snippets in the existing test project.
+- [ ] Select/embed a NuGet logo for #4.
+- [ ] Define business-logic context requirements for #20.
+- [ ] Agree Problem Details assertions/diagnostics for #18.
+- [ ] Complete public XML documentation for #2 as contracts are settled.
+
+## JSON host inheritance follow-up
+
+- [x] Record the user's choice: include host inheritance and per-call overrides;
+  propose the API before implementing it.
+- [x] Inspect Alba's host strategies, request JsonStyle override, response reads,
+  documentation and acceptance tests; record the exact source revision in plan.md.
+- [x] Compare FastEndpoints client helpers/startup settings and .NET JSON helpers.
+- [x] Correct the plan: automatically inherit API settings; remove the unapproved
+  JsonSettingsSource / Given selection and MVC-first precedence proposal.
+- [x] Identify the concrete fix in existing helpers/builders and record unchanged
+  default API calls plus optional per-call overrides in plan.md.
+- [x] Check routing internals and endpoint-local override limits in .NET 10 sources.
+- [x] Obtain approval for the revised API and mixed-host policy: MVC when JSON
+  formatters exist, otherwise HTTP options; not endpoint-aware inheritance.
+- [x] Record requested IHost/Aspire preparation and the process boundary in plan.md.
+- [x] Keep settings resolution independent of WebApplicationFactory, using
+  IServiceProvider and the existing client factory boundary; verify with IHost.
+- [x] Implement the approved design and cover real converter round trips, mixed
+  hosts, overrides, concurrent isolation and scenario chaining.
+- [x] Regenerate snippets, verify build/tests/package, reassess #22/#19.
+- [x] Review the JSON resolver against the researched sources: no copied
+  implementation identified. Check the host and both serializer implementations
+  against the resolver/helper integration and Ogooreck's naming and conventions;
+  record the implementation differences in plan.md. Remove all comments added
+  in this change; retain source links in the requested research record.
+
+Verification on 2026-11-04: `./build.sh test pack` passed all 157 tests (API 11,
+C# business logic 15, F# 5, library 126), with zero build warnings/errors. The 12
+new cases cover real MVC/Minimal round trips, distinct MVC input/output options,
+mixed-host defaults/overrides, endpoint-local overrides, failures, concurrent
+hosts, defaults, repeated reads, Generic Host services and lazy resolution.
+`./build.sh docs` regenerated executable snippets with no README changes.
+No new project, package dependency or public host adapter was introduced.
+The existing package README advisory remains unchanged. #19/#22 stay open while
+this implementation is local; no issue comment or closure was made in this step.
 
 ## Resolved dependency versions
 

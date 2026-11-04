@@ -141,6 +141,17 @@ public record MadeApiCall(TestPhase TestPhase, HttpRequestMessage Request, HttpR
 
 public class TestContext
 {
+    private readonly Lazy<ApiJsonSettings> jsonSettings;
+
+    public TestContext(): this(() => ApiJsonSettings.Web)
+    {
+    }
+
+    internal TestContext(Func<ApiJsonSettings> resolveJsonSettings) =>
+        jsonSettings = new Lazy<ApiJsonSettings>(resolveJsonSettings);
+
+    internal ApiJsonSettings JsonSettings => jsonSettings.Value;
+
     public List<MadeApiCall> Calls { get; } = new();
 
     public void Record(ApiTestStep testStep, HttpRequestMessage request, HttpResponseMessage response) =>

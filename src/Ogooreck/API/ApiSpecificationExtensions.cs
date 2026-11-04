@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Ogooreck.Assertions;
 
 namespace Ogooreck.API;
@@ -48,9 +49,12 @@ public static class ApiSpecification
         };
 
     public static RequestTransform BODY<T>(T body) =>
-        (request, _) =>
+        BODY(body, null);
+
+    public static RequestTransform BODY<T>(T body, JsonSerializerOptions? options) =>
+        (request, ctx) =>
         {
-            request.Content = JsonContent.Create(body);
+            request.Content = JsonContent.Create(body, options: options ?? ctx.JsonSettings.Request);
 
             return request;
         };
@@ -195,7 +199,11 @@ public static class ApiSpecification
         await (await when.WaitAsync(ct)).Then(thens, ct);
 
 
-    public static Task<T> GetResponseBody<T>(this Task<Result> result) => result.Map(RESPONSE_BODY<T>());
+    public static Task<T> GetResponseBody<T>(this Task<Result> result) => result.GetResponseBody<T>(null);
+
+    public static async Task<T> GetResponseBody<T>(this Task<Result> result, JsonSerializerOptions? options) =>
+        await (await result).GetResultFromJson<T>(options);
+
     public static Task<T> GetCreatedId<T>(this Task<Result> result) => result.Map(CREATED_ID<T>());
 
     public static async Task<T> Map<T>(
@@ -238,18 +246,30 @@ public static class ApiSpecification
         };
 
     public static ResponseAssert RESPONSE_BODY<T>(T body) =>
-        RESPONSE_BODY<T>(result => Expect.Equivalent(result, body, "Response body"));
+        RESPONSE_BODY(body, null);
+
+    public static ResponseAssert RESPONSE_BODY<T>(T body, JsonSerializerOptions? options) =>
+        RESPONSE_BODY<T>(result => Expect.Equivalent(result, body, "Response body"), options);
 
     public static ResponseAssert RESPONSE_BODY<T>(Func<TestContext, T> getBody) =>
-        RESPONSE_BODY<T>((result, ctx) => Expect.Equivalent(result, getBody(ctx), "Response body"));
+        RESPONSE_BODY(getBody, null);
+
+    public static ResponseAssert RESPONSE_BODY<T>(Func<TestContext, T> getBody, JsonSerializerOptions? options) =>
+        RESPONSE_BODY<T>((result, ctx) => Expect.Equivalent(result, getBody(ctx), "Response body"), options);
 
     public static ResponseAssert RESPONSE_BODY<T>(Action<T> assert) =>
-        RESPONSE_BODY<T>((body, _) => assert(body));
+        RESPONSE_BODY(assert, null);
+
+    public static ResponseAssert RESPONSE_BODY<T>(Action<T> assert, JsonSerializerOptions? options) =>
+        RESPONSE_BODY<T>((body, _) => assert(body), options);
 
     public static ResponseAssert RESPONSE_BODY<T>(Action<T, TestContext> assert) =>
+        RESPONSE_BODY(assert, null);
+
+    public static ResponseAssert RESPONSE_BODY<T>(Action<T, TestContext> assert, JsonSerializerOptions? options) =>
         async (response, ctx) =>
         {
-            var result = await response.GetResultFromJson<T>();
+            var result = await response.GetResultFromJson<T>(options ?? ctx.JsonSettings.Response);
             assert(result, ctx);
         };
 
@@ -316,11 +336,14 @@ public static class ApiSpecification
         };
 
     public static RetryCheck RESPONSE_BODY_MATCHES<TBody>(Func<TBody, bool> assert) =>
+        RESPONSE_BODY_MATCHES(assert, null);
+
+    public static RetryCheck RESPONSE_BODY_MATCHES<TBody>(Func<TBody, bool> assert, JsonSerializerOptions? options) =>
         async (response, ctx) =>
         {
             response.EnsureSuccessStatusCode();
 
-            var result = await response.GetResultFromJson<TBody>();
+            var result = await response.GetResultFromJson<TBody>(options ?? ctx.JsonSettings.Response);
 
             return assert(result);
         };
