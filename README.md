@@ -1,4 +1,4 @@
-[![Twitter Follow](https://img.shields.io/twitter/follow/oskar_at_net?style=social)](https://twitter.com/oskar_at_net) ![Github Actions](https://github.com/oskardudycz/Ogooreck/actions/workflows/build.dotnet.yml/badge.svg?branch=main) [![blog](https://img.shields.io/badge/blog-event--driven.io-brightgreen)](https://event-driven.io/?utm_source=event_sourcing_net) [![blog](https://img.shields.io/badge/%F0%9F%9A%80-Architecture%20Weekly-important)](https://www.architecture-weekly.com/?utm_source=event_sourcing_net)
+[![Twitter Follow](https://img.shields.io/twitter/follow/oskar_at_net?style=social)](https://twitter.com/oskar_at_net) ![Github Actions](https://github.com/oskardudycz/Ogooreck/actions/workflows/dotnet-ci.yml/badge.svg?branch=main) [![blog](https://img.shields.io/badge/blog-event--driven.io-brightgreen)](https://event-driven.io/?utm_source=event_sourcing_net) [![blog](https://img.shields.io/badge/%F0%9F%9A%80-Architecture%20Weekly-important)](https://www.architecture-weekly.com/?utm_source=event_sourcing_net)
 [![Nuget Package](https://badgen.net/nuget/v/ogooreck)](https://www.nuget.org/packages/Ogooreck/)
 [![Nuget](https://img.shields.io/nuget/dt/ogooreck)](https://www.nuget.org/packages/Ogooreck/)
 
@@ -30,7 +30,7 @@ Check also my articles:
 
 ## Support
 
-Feel free to [create an issue](https://github.com/oskardudycz/Ogooreck/issues/new) if you have any questions or request for more explanation or samples. I also take **Pull Requests**!
+Feel free to [create an issue](https://github.com/oskardudycz/Ogooreck/issues/new) if you have any questions or request for more explanation or samples. I also take **Pull Requests**! See [how to contribute](./CONTRIBUTING.md).
 
 💖 If this tool helped you - I'd be more than happy if you **join** the group of **my official supporters** at:
 
@@ -145,10 +145,10 @@ public static class BankAccountEventsBuilder
     }
 }
 ```
-<sup><a href='/src/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs#L1-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-BankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs#L1-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-BankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs).
 
 **F#**
 <!-- snippet: FSharpBankAccountDeciderTests -->
@@ -165,17 +165,14 @@ open FsCheck.Xunit
 
 let random = Random()
 
-let spec =
-    Specification.For(decide, evolve, Initial)
+let spec = Specification.For(decide, evolve, Initial)
 
 let BankAccountOpenedWith bankAccountId now version =
-    let accountNumber =
-        AccountNumber.parse (Guid.NewGuid().ToString())
+    let accountNumber = AccountNumber.parse (Guid.NewGuid().ToString())
 
     let clientId = ClientId.newId ()
 
-    let currencyISOCode =
-        CurrencyIsoCode.parse "USD"
+    let currencyISOCode = CurrencyIsoCode.parse "USD"
 
     BankAccountOpened
         { BankAccountId = bankAccountId
@@ -269,10 +266,10 @@ let ``GIVEN closed account WHEN deposit THEN throws``
         .ThenThrows<InvalidOperationException>()
     |> ignore
 ```
-<sup><a href='/src/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs#L1-L116' title='Snippet source file'>snippet source</a> | <a href='#snippet-FSharpBankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/dotnet/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs#L1-L113' title='Snippet source file'>snippet source</a> | <a href='#snippet-FSharpBankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs).
+See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs).
 
 ### Event-Sourced command handlers
 
@@ -351,7 +348,7 @@ public static class IncidentEventsBuilder
 }
 ```
 
-See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
 
 ### State-based command handlers
 
@@ -415,7 +412,7 @@ public static class IncidentEventsBuilder
 
 ```
 
-See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
 
 
 ### Event-Driven Aggregate tests
@@ -507,7 +504,7 @@ public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggre
 }
 ```
 
-See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/EventSourced/ShoppingCartTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/EventSourced/ShoppingCartTests.cs).
 
 ### State-based Aggregate tests
 
@@ -522,8 +519,8 @@ using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Products;
 
 namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased;
 
-using static ShoppingCartEventsBuilder;
 using static ProductItemBuilder;
+using static ShoppingCartEventsBuilder;
 
 public class ShoppingCartTests
 {
@@ -601,10 +598,10 @@ public static class ProductItemBuilder
         ProductItem.From(Guid.NewGuid(), Random.Next(1, 100));
 }
 ```
-<sup><a href='/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs#L1-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-StateBasedShoppingCartTests' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs#L1-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-StateBasedShoppingCartTests' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-See full sample in [tests](/src/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs).
 
 ## API Testing
 

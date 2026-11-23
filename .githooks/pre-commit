@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+# Format staged .NET sources before committing: C# with dotnet format, F# with
+# Fantomas. The .editorconfig is the source of truth; this hook keeps commits
+# clean regardless of which editor produced them.
+set -eu
+
+staged() {
+  git diff --cached --name-only --diff-filter=ACM -- src/dotnet | grep -E "$1" || true
+}
+
+csharp=$(staged '\.cs$')
+fsharp=$(staged '\.fs[ix]?$')
+[ -z "$csharp$fsharp" ] && exit 0
+
+if [ -n "$csharp" ]; then
+  echo "pre-commit: running dotnet format on staged C# sources..."
+  ( cd src/dotnet && printf '%s\n' "$csharp" | sed 's#^src/dotnet/##' | xargs dotnet format Ogooreck.slnx --include )
+fi
+
+if [ -n "$fsharp" ]; then
+  echo "pre-commit: running Fantomas on staged F# sources..."
+  ( cd src/dotnet && dotnet tool restore > /dev/null && printf '%s\n' "$fsharp" | sed 's#^src/dotnet/##' | xargs dotnet fantomas )
+fi
+
+# Re-stage the files the formatters may have changed.
+printf '%s\n' "$csharp" "$fsharp" | grep -v '^$' | xargs git add

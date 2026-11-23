@@ -1,0 +1,31 @@
+name: Dev Container .NET CI
+
+on:
+  push:
+    paths:
+      - '.devcontainer/dotnet/**'
+      - 'src/dotnet/**'
+      - '.github/workflows/devcontainer-dotnet-ci.yml'
+  pull_request:
+    paths:
+      - '.devcontainer/dotnet/**'
+      - 'src/dotnet/**'
+      - '.github/workflows/devcontainer-dotnet-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-devcontainer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Build dev container and run the .NET build inside it
+        uses: devcontainers/ci@v0.3
+        with:
+          configFile: .devcontainer/dotnet/devcontainer.json
+          push: never
+          runCmd: cd src/dotnet && ./build.sh test

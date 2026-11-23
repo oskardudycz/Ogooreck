@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+      <Nullable>enable</Nullable>
+      <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+      <ImplicitUsings>enable</ImplicitUsings>
+      <RepositoryRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..'))</RepositoryRoot>
+  </PropertyGroup>
+
+  <Target Name="UseRepositoryGitHooks"
+          BeforeTargets="Build"
+          Condition="'$(CI)' != 'true' and Exists('$(RepositoryRoot).git') and Exists('$(RepositoryRoot).githooks')">
+    <Exec Command="git config core.hooksPath .githooks"
+          WorkingDirectory="$(RepositoryRoot)"
+          ContinueOnError="true"
+          StandardOutputImportance="low" />
+  </Target>
+</Project>

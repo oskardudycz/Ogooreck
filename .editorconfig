@@ -156,3 +156,7 @@ csharp_space_between_method_call_empty_parameter_list_parentheses = false
 # Wrapping preferences
 csharp_preserve_single_line_statements = false
 csharp_preserve_single_line_blocks = true
+
+[*.{fs,fsi,fsx}]
+fsharp_multiline_bracket_style = cramped
+max_line_length = 80

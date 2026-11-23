@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "ms-dotnettools.csdevkit",
+    "ionide.ionide-fsharp",
+    "editorconfig.editorconfig"
+  ]
+}

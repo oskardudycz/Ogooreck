@@ -1,0 +1,94 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}/src/dotnet"
+  },
+  "tasks": [
+    {
+      "label": "compile",
+      "type": "shell",
+      "command": "dotnet build Ogooreck.slnx",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$msCompile"]
+    },
+    {
+      "label": "build (full)",
+      "type": "shell",
+      "command": "./build.sh test",
+      "windows": {
+        "command": ".\\build.cmd test"
+      },
+      "group": "build",
+      "problemMatcher": ["$msCompile"]
+    },
+    {
+      "label": "test",
+      "type": "shell",
+      "command": "dotnet test Ogooreck.slnx",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": ["$msCompile"]
+    },
+    {
+      "label": "pack",
+      "type": "shell",
+      "command": "./build.sh pack",
+      "windows": {
+        "command": ".\\build.cmd pack"
+      },
+      "group": "build",
+      "problemMatcher": ["$msCompile"]
+    },
+    {
+      "label": "clean",
+      "type": "shell",
+      "command": "dotnet clean Ogooreck.slnx",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "format",
+      "type": "shell",
+      "command": "dotnet format Ogooreck.slnx && dotnet tool restore && dotnet fantomas .",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "verify format",
+      "type": "shell",
+      "command": "./build.sh verify-format",
+      "windows": {
+        "command": ".\\build.cmd verify-format"
+      },
+      "group": "build",
+      "problemMatcher": ["$msCompile"]
+    },
+    {
+      "label": "docs",
+      "detail": "Regenerates README.md from mdsource/README.source.md and the test snippets.",
+      "type": "shell",
+      "command": "./build.sh docs",
+      "windows": {
+        "command": ".\\build.cmd docs"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Install All Recommended Extensions",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "command": "node -e \"console.log(JSON.parse(require('fs').readFileSync('./.vscode/extensions.json')).recommendations.join('\\n'))\" | xargs -L 1 code --install-extension",
+      "windows": {
+        "command": "powershell ((node -e \"console.log(JSON.parse(require('fs').readFileSync('./.vscode/extensions.json')).recommendations.join('\\\\n'))\") -split '\\r?\\n') | ForEach-Object { code --install-extension $_ }"
+      }
+    }
+  ]
+}

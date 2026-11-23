@@ -1,0 +1,38 @@
+{
+  "folders": [
+    {
+      "name": "ogooreck",
+      "path": "."
+    },
+    {
+      "name": "dotnet",
+      "path": "src/dotnet"
+    }
+  ],
+  "settings": {
+    "dotnet.defaultSolution": "src/dotnet/Ogooreck.slnx",
+    "dotnet.formatting.organizeImportsOnFormat": true,
+
+    "[csharp]": {
+      "editor.formatOnSave": true,
+      "editor.defaultFormatter": "ms-dotnettools.csharp",
+      "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit"
+      },
+      "editor.tabSize": 4
+    },
+    "[fsharp]": {
+      "editor.formatOnSave": true,
+      "editor.defaultFormatter": "Ionide.Ionide-fsharp",
+      "editor.tabSize": 4
+    },
+
+    "files.exclude": {
+      "**/bin/": true,
+      "**/obj/": true,
+      "**/artifacts/": true,
+      "node_modules/": true,
+      "**/node_modules/": true
+    }
+  }
+}

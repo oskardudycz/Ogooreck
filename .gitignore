@@ -252,3 +252,5 @@ paket-files/
 *.sln.iml
 
 **/out
+# Session markers written by the agent change-check hooks.
+.agents/.cache/

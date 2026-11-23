@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "fantomas": {
+      "version": "8.1.1",
+      "commands": [
+        "fantomas"
+      ]
+    },
+    "markdownsnippets.tool": {
+      "version": "28.5.1",
+      "commands": [
+        "mdsnippets"
+      ]
+    }
+  }
+}

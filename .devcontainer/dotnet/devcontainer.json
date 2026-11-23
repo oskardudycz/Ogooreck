@@ -1,0 +1,29 @@
+{
+  "name": "ogooreck-dotnet",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:10.0",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "ionide.ionide-fsharp",
+        "editorconfig.editorconfig"
+      ],
+      "settings": {
+        "dotnet.defaultSolution": "src/dotnet/Ogooreck.slnx",
+        "dotnet.formatting.organizeImportsOnFormat": true,
+        "[csharp]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "ms-dotnettools.csharp",
+          "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit"
+          }
+        },
+        "[fsharp]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "Ionide.Ionide-fsharp"
+        }
+      }
+    }
+  },
+  "postCreateCommand": "git config core.hooksPath .githooks && cd src/dotnet && dotnet tool restore && dotnet restore Ogooreck.slnx"
+}

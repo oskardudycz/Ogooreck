@@ -1,0 +1,31 @@
+name: .NET CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/dotnet/**'
+      - '.github/workflows/dotnet-ci.yml'
+  pull_request:
+    paths:
+      - 'src/dotnet/**'
+      - '.github/workflows/dotnet-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build and test
+        working-directory: src/dotnet
+        run: ./build.sh test
