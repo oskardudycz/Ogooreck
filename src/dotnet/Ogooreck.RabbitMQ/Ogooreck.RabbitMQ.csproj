@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <VersionPrefix>0.10.0</VersionPrefix>
+        <TargetFramework>net10.0</TargetFramework>
+        <GenerateAssemblyTitleAttribute>true</GenerateAssemblyTitleAttribute>
+        <GenerateAssemblyDescriptionAttribute>true</GenerateAssemblyDescriptionAttribute>
+        <GenerateAssemblyProductAttribute>true</GenerateAssemblyProductAttribute>
+        <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+        <GenerateAssemblyVersionAttribute>true</GenerateAssemblyVersionAttribute>
+        <GenerateAssemblyFileVersionAttribute>true</GenerateAssemblyFileVersionAttribute>
+        <GenerateAssemblyInformationalVersionAttribute>true</GenerateAssemblyInformationalVersionAttribute>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <LangVersion>14.0</LangVersion>
+        <Authors>Oskar Dudycz</Authors>
+        <PackageProjectUrl>https://github.com/oskardudycz/Ogooreck</PackageProjectUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryUrl>https://github.com/oskardudycz/Ogooreck.git</RepositoryUrl>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <Product>Ogooreck</Product>
+        <Description>Ogooreck plug for RabbitMQ: records the messages an in-process app publishes and waits until its consumers are done with them.</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="RabbitMQ.Client" Version="7.2.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Ogooreck\Ogooreck.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="$(RepositoryRoot)README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+</Project>

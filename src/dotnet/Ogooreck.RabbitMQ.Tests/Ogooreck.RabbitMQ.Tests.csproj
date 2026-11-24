@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="RabbitMQ.Client" Version="7.2.2" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+        <PackageReference Include="Testcontainers.RabbitMq" Version="4.16.0" />
+        <PackageReference Include="xunit.v3.mtp-off" Version="4.0.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Ogooreck.Sample.RabbitMQ\Ogooreck.Sample.RabbitMQ.csproj" />
+        <ProjectReference Include="..\Ogooreck\Ogooreck.csproj" />
+        <ProjectReference Include="..\Ogooreck.RabbitMQ\Ogooreck.RabbitMQ.csproj" />
+    </ItemGroup>
+
+</Project>

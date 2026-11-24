@@ -58,7 +58,7 @@ You can use `DeciderSpecification` to run decider and command handling tests. Se
 ```cs
 using Ogooreck.BusinessLogic;
 
-namespace Ogooreck.Sample.BusinessLogic.Tests.Deciders;
+namespace Ogooreck.BusinessLogic.Tests.Deciders;
 
 using static BankAccountEventsBuilder;
 
@@ -145,10 +145,10 @@ public static class BankAccountEventsBuilder
     }
 }
 ```
-<sup><a href='/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs#L1-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-BankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/dotnet/Ogooreck.BusinessLogic.Tests/Deciders/BankAccountTests.cs#L1-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-BankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.BusinessLogic.Tests/Deciders/BankAccountTests.cs).
 
 **F#**
 <!-- snippet: FSharpBankAccountDeciderTests -->
@@ -266,10 +266,10 @@ let ``GIVEN closed account WHEN deposit THEN throws``
         .ThenThrows<InvalidOperationException>()
     |> ignore
 ```
-<sup><a href='/src/dotnet/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs#L1-L113' title='Snippet source file'>snippet source</a> | <a href='#snippet-FSharpBankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/dotnet/Ogooreck.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs#L1-L113' title='Snippet source file'>snippet source</a> | <a href='#snippet-FSharpBankAccountDeciderTests' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs).
+See full sample in [tests](/src/dotnet/Ogooreck.BusinessLogic.FSharp.Tests/Deciders/BankAccountTests.fs).
 
 ### Event-Sourced command handlers
 
@@ -278,7 +278,7 @@ You can use `HandlerSpecification` to run event-sourced command handling tests f
 ```csharp
 using Ogooreck.BusinessLogic;
 
-namespace Ogooreck.Sample.BusinessLogic.Tests.Functions.EventSourced;
+namespace Ogooreck.BusinessLogic.Tests.Functions.EventSourced;
 
 using static IncidentEventsBuilder;
 using static IncidentService;
@@ -348,7 +348,7 @@ public static class IncidentEventsBuilder
 }
 ```
 
-See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
 
 ### State-based command handlers
 
@@ -357,7 +357,7 @@ You can use `HandlerSpecification` to run state-based command handling tests for
 ```csharp
 using Ogooreck.BusinessLogic;
 
-namespace Ogooreck.Sample.BusinessLogic.Tests.Functions.StateBased;
+namespace Ogooreck.BusinessLogic.Tests.Functions.StateBased;
 
 using static IncidentEventsBuilder;
 using static IncidentService;
@@ -412,7 +412,7 @@ public static class IncidentEventsBuilder
 
 ```
 
-See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.BusinessLogic.Tests/Functions/EventSourced/IncidentTests.cs).
 
 
 ### Event-Driven Aggregate tests
@@ -421,12 +421,12 @@ You can use `HandlerSpecification` to run event-driven aggregat tests. See the e
 
 ```csharp
 using Ogooreck.BusinessLogic;
-using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Core;
-using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Pricing;
-using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced.Products;
-using Ogooreck.Sample.BusinessLogic.Tests.Functions.EventSourced;
+using Ogooreck.BusinessLogic.Tests.Aggregates.EventSourced.Core;
+using Ogooreck.BusinessLogic.Tests.Aggregates.EventSourced.Pricing;
+using Ogooreck.BusinessLogic.Tests.Aggregates.EventSourced.Products;
+using Ogooreck.BusinessLogic.Tests.Functions.EventSourced;
 
-namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.EventSourced;
+namespace Ogooreck.BusinessLogic.Tests.Aggregates.EventSourced;
 
 using static ShoppingCartEventsBuilder;
 using static ProductItemBuilder;
@@ -504,7 +504,7 @@ public static class AggregateTestExtensions<TAggregate> where TAggregate : Aggre
 }
 ```
 
-See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/EventSourced/ShoppingCartTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.BusinessLogic.Tests/Aggregates/EventSourced/ShoppingCartTests.cs).
 
 ### State-based Aggregate tests
 
@@ -514,10 +514,10 @@ You can use `HandlerSpecification` to run event-driven aggregat tests. See the e
 <a id='snippet-StateBasedShoppingCartTests'></a>
 ```cs
 using Ogooreck.BusinessLogic;
-using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Pricing;
-using Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased.Products;
+using Ogooreck.BusinessLogic.Tests.Aggregates.StateBased.Pricing;
+using Ogooreck.BusinessLogic.Tests.Aggregates.StateBased.Products;
 
-namespace Ogooreck.Sample.BusinessLogic.Tests.Aggregates.StateBased;
+namespace Ogooreck.BusinessLogic.Tests.Aggregates.StateBased;
 
 using static ProductItemBuilder;
 using static ShoppingCartEventsBuilder;
@@ -598,10 +598,10 @@ public static class ProductItemBuilder
         ProductItem.From(Guid.NewGuid(), Random.Next(1, 100));
 }
 ```
-<sup><a href='/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs#L1-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-StateBasedShoppingCartTests' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/dotnet/Ogooreck.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs#L1-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-StateBasedShoppingCartTests' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-See full sample in [tests](/src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs).
+See full sample in [tests](/src/dotnet/Ogooreck.BusinessLogic.Tests/Aggregates/StateBased/ShoppingCartTests.cs).
 
 ## API Testing
 

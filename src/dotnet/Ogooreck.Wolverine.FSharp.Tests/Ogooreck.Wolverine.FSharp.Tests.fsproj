@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="Shop.fs" />
+        <Compile Include="PlacingAnOrderTests.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+        <PackageReference Include="xunit.v3.mtp-off" Version="4.0.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Update="FSharp.Core" Version="11.0.100" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Ogooreck.Sample.Wolverine\Ogooreck.Sample.Wolverine.csproj" />
+        <ProjectReference Include="..\Ogooreck\Ogooreck.csproj" />
+        <ProjectReference Include="..\Ogooreck.Wolverine\Ogooreck.Wolverine.csproj" />
+    </ItemGroup>
+
+</Project>

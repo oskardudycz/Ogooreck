@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <VersionPrefix>0.10.0</VersionPrefix>
+        <TargetFramework>net10.0</TargetFramework>
+        <GenerateAssemblyTitleAttribute>true</GenerateAssemblyTitleAttribute>
+        <GenerateAssemblyDescriptionAttribute>true</GenerateAssemblyDescriptionAttribute>
+        <GenerateAssemblyProductAttribute>true</GenerateAssemblyProductAttribute>
+        <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+        <GenerateAssemblyVersionAttribute>true</GenerateAssemblyVersionAttribute>
+        <GenerateAssemblyFileVersionAttribute>true</GenerateAssemblyFileVersionAttribute>
+        <GenerateAssemblyInformationalVersionAttribute>true</GenerateAssemblyInformationalVersionAttribute>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <LangVersion>14.0</LangVersion>
+        <Authors>Oskar Dudycz</Authors>
+        <PackageProjectUrl>https://github.com/oskardudycz/Ogooreck</PackageProjectUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryUrl>https://github.com/oskardudycz/Ogooreck.git</RepositoryUrl>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <Product>Ogooreck</Product>
+        <Description>Ogooreck plug for Marten: records the events an in-process app appends and waits for its async projections.</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Marten" Version="9.58.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Ogooreck\Ogooreck.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="$(RepositoryRoot)README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+</Project>

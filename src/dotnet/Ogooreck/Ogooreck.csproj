@@ -19,6 +19,8 @@
         <RepositoryUrl>https://github.com/oskardudycz/Ogooreck.git</RepositoryUrl>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <Product>Ogooreck</Product>
+        <Description>Sneaky testing library for readable Given/When/Then tests of business logic and ASP.NET Core APIs, from C# and F#, with any test framework.</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <IncludeSymbols>true</IncludeSymbols>
@@ -26,8 +28,14 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Google.Protobuf" Version="3.36.2" />
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
         <InternalsVisibleTo Include="Ogooreck.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="$(RepositoryRoot)README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
 </Project>

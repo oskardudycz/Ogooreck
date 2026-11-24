@@ -17,6 +17,9 @@ internal static class Expect
     public static void Equivalent<T>(T actual, T expected, string description) =>
         StructuralComparison.AssertEquivalent(actual, expected, description);
 
+    public static void EquivalentWithEveryCollectionInOrder<T>(T actual, T expected, string description) =>
+        StructuralComparison.AssertEquivalentWithEveryCollectionInOrder(actual, expected, description);
+
     public static void OrderedEquivalent<T>(IReadOnlyList<T> actual, IReadOnlyList<T> expected, string description)
         => StructuralComparison.AssertOrderedEquivalent(actual, expected, description);
 }

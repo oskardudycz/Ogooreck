@@ -7,9 +7,22 @@
       <RepositoryRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..'))</RepositoryRoot>
   </PropertyGroup>
 
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <PackageReference Include="coverlet.msbuild" Version="10.1.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests')) and '$(MSBuildProjectExtension)' == '.csproj'">
+    <Compile Include="$(MSBuildThisFileDirectory)Shared/*.cs" LinkBase="Shared" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.11.0" />
+  </ItemGroup>
+
   <Target Name="UseRepositoryGitHooks"
           BeforeTargets="Build"
-          Condition="'$(CI)' != 'true' and Exists('$(RepositoryRoot).git') and Exists('$(RepositoryRoot).githooks')">
+          Condition="'$(MSBuildProjectName)' == 'Ogooreck' and '$(CI)' != 'true' and Exists('$(RepositoryRoot).git') and Exists('$(RepositoryRoot).githooks')">
     <Exec Command="git config core.hooksPath .githooks"
           WorkingDirectory="$(RepositoryRoot)"
           ContinueOnError="true"
