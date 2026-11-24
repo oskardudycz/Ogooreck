@@ -4,9 +4,21 @@ using Ogooreck.Assertions;
 
 namespace Ogooreck.API;
 
-#pragma warning disable CS1591
+/// <summary>
+/// Reads what an API returned from an <see cref="HttpResponseMessage"/>: the id of a created resource from the <c>Location</c> header, and the JSON body as an object.
+/// Use them in a <c>Request</c> step to feed one response into the next request.
+/// </summary>
 public static class HttpResponseMessageExtensions
 {
+    /// <summary>
+    /// Reads the id of a created resource from the last segment of the <c>Location</c> header, converted to <typeparamref name="T"/>.
+    /// Returns <c>false</c> when there is no <c>Location</c> header or the segment is empty.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// response.TryGetCreatedId&lt;Guid&gt;(out var id)
+    /// </code>
+    /// </example>
     public static bool TryGetCreatedId<T>(this HttpResponseMessage response, out T? value)
     {
         value = default;
@@ -22,60 +34,44 @@ public static class HttpResponseMessageExtensions
 
         var createdId = locationHeader.Substring(start + 1, locationHeader.Length - 1 - start);
 
-        var result = TypeDescriptor.GetConverter(typeof(T)).ConvertFromInvariantString(createdId);
-
-        if (result == null)
-            return false;
-
-        value = (T?)result;
+        value = (T?)TypeDescriptor.GetConverter(typeof(T)).ConvertFromInvariantString(createdId);
 
         return true;
     }
 
+    /// <summary>
+    /// Reads the id of a created resource from the <c>Location</c> header, and throws when the response has none.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// var cartId = response.GetCreatedId&lt;Guid&gt;();
+    /// </code>
+    /// </example>
     public static T GetCreatedId<T>(this HttpResponseMessage response) =>
         response.TryGetCreatedId<T>(out var createdId)
             ? createdId!
             : throw new ArgumentOutOfRangeException(nameof(response.Headers.Location));
 
+    /// <summary>
+    /// Reads the id of a created resource from the <c>Location</c> header as a string.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// Request(async (client, context) => await client.PostAsync($"/carts/{context.CreatedId()}/items", content))
+    /// </code>
+    /// </example>
     public static string GetCreatedId(this HttpResponseMessage response) =>
         response.GetCreatedId<string>();
 
-    public static bool TryGetETagValue<T>(this HttpResponseMessage response, out T? value)
-    {
-        value = default;
-
-        var eTagHeader = response.Headers.ETag?.Tag;
-
-        if (string.IsNullOrEmpty(eTagHeader))
-            return false;
-
-        eTagHeader = eTagHeader.Substring(1, eTagHeader.Length - 2);
-
-        var result = TypeDescriptor.GetConverter(typeof(T)).ConvertFromInvariantString(eTagHeader);
-
-        if (result == null)
-            return false;
-
-        value = (T?)result;
-
-        return true;
-    }
-
-    public static T GetETagValue<T>(this HttpResponseMessage response) =>
-        response.TryGetETagValue<T>(out var eTag)
-            ? eTag!
-            : throw new ArgumentOutOfRangeException(nameof(response.Headers.ETag));
-
-    public static string GetETagValue(this HttpResponseMessage response) =>
-        response.GetETagValue<string>();
-
-    public static Task<T> GetResultFromJson<T>(
-        this ApiSpecification.Result result,
-        JsonSerializerOptions? options = null
-    ) =>
-        result.Response.GetResultFromJson<T>(options ?? result.TestContext.JsonSettings.Response);
-
-
+    /// <summary>
+    /// Deserializes the JSON body into <typeparamref name="T"/>, with web defaults when you pass no <paramref name="options"/>.
+    /// It can be called more than once on the same response, and fails with a clear message when the body is <c>null</c>.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// var cart = await response.GetResultFromJson&lt;ShoppingCartDetails&gt;();
+    /// </code>
+    /// </example>
     public static async Task<T> GetResultFromJson<T>(
         this HttpResponseMessage response,
         JsonSerializerOptions? options = null

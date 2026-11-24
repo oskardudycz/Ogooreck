@@ -2,7 +2,6 @@ using System.Collections;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace Ogooreck.Assertions;
 
@@ -11,10 +10,13 @@ namespace Ogooreck.Assertions;
 internal static class StructuralComparison
 {
     public static void AssertEquivalent<T>(T actual, T expected, string description) =>
-        Assert(Compare(actual, expected, typeof(T), "", [], IsCollection(typeof(T))), description);
+        Assert(Compare(actual, expected, typeof(T), "", [], IsCollection(typeof(T)), false), description);
 
     public static void AssertOrderedEquivalent<T>(IReadOnlyList<T> actual, IReadOnlyList<T> expected, string description) =>
-        Assert(CompareCollections(actual, expected, typeof(object), "", [], true, true), description);
+        Assert(CompareCollections(actual, expected, typeof(object), "", [], true, true, false), description);
+
+    public static void AssertEquivalentWithEveryCollectionInOrder<T>(T actual, T expected, string description) =>
+        Assert(Compare(actual, expected, typeof(T), "", [], IsCollection(typeof(T)), true), description);
 
     private static void Assert(string? failure, string description)
     {
@@ -23,7 +25,7 @@ internal static class StructuralComparison
     }
 
     private static string? Compare(object? actual, object? expected, Type declaredType, string path,
-        List<object> ancestors, bool rootIsCollection)
+        List<object> ancestors, bool rootIsCollection, bool inOrder)
     {
         // The old engine counts member separators, not collection indexes.
         if (path.Count(c => c == '.') > 10)
@@ -47,7 +49,7 @@ internal static class StructuralComparison
         {
             var dictionary = GenericInterfaces(type, typeof(IDictionary<,>)).SingleOrDefault();
             if (dictionary is not null)
-                return CompareDictionary(actual, expected, dictionary, path, ancestors, rootIsCollection);
+                return CompareDictionary(actual, expected, dictionary, path, ancestors, rootIsCollection, inOrder);
 
             if (typeof(IDictionary).IsAssignableFrom(type))
             {
@@ -58,7 +60,7 @@ internal static class StructuralComparison
                 foreach (var key in expectedMap.Keys)
                 {
                     var failure = Compare(actualMap[key], expectedMap[key], typeof(object),
-                        $"{path}[{key}]", ancestors, rootIsCollection);
+                        $"{path}[{key}]", ancestors, rootIsCollection, inOrder);
                     if (failure is not null)
                         return failure;
                 }
@@ -72,7 +74,7 @@ internal static class StructuralComparison
                         actualArray.GetLength(i) != expectedArray.GetLength(i) ||
                         actualArray.GetLowerBound(i) != expectedArray.GetLowerBound(i)))
                     return $"{Display(path)}: array dimensions do not match.";
-                return CompareCollections(actualArray, expectedArray, typeof(object), path, ancestors, rootIsCollection, true);
+                return CompareCollections(actualArray, expectedArray, typeof(object), path, ancestors, rootIsCollection, true, inOrder);
             }
 
             if (IsCollection(type))
@@ -84,7 +86,7 @@ internal static class StructuralComparison
                     return $"{Display(path)}: expected collection has ambiguous element types.";
                 var itemType = enumerations.SingleOrDefault()?.GenericTypeArguments[0] ?? typeof(object);
                 return CompareCollections(actualItems, expectedItems, itemType, path, ancestors, rootIsCollection,
-                    typeof(IEnumerable<byte>).IsAssignableFrom(type));
+                    inOrder || typeof(IEnumerable<byte>).IsAssignableFrom(type), inOrder);
             }
 
             if (type == typeof(string))
@@ -105,12 +107,12 @@ internal static class StructuralComparison
                 // Matching can cross property/field boundaries and use an explicit
                 // interface implementation, as the previous default matching did.
                 var actualMember = FindMember(actual.GetType(), member.Name);
-                if (member.DeclaringType?.IsInstanceOfType(actual) == true)
+                if (member.DeclaringType!.IsInstanceOfType(actual))
                     actualMember = member;
                 if (actualMember is null)
                     return $"{Display(MemberPath(path, member.Name))}: actual value has no matching member.";
                 var failure = Compare(Read(actualMember, actual), Read(member, expected), MemberType(member),
-                    MemberPath(path, member.Name), ancestors, rootIsCollection);
+                    MemberPath(path, member.Name), ancestors, rootIsCollection, inOrder);
                 if (failure is not null)
                     return failure;
             }
@@ -124,7 +126,7 @@ internal static class StructuralComparison
     }
 
     private static string? CompareDictionary(object actual, object expected, Type expectedContract, string path,
-        List<object> ancestors, bool rootIsCollection)
+        List<object> ancestors, bool rootIsCollection, bool inOrder)
     {
         var keyType = expectedContract.GenericTypeArguments[0];
         var valueType = expectedContract.GenericTypeArguments[1];
@@ -155,10 +157,10 @@ internal static class StructuralComparison
         foreach (var entry in expectedEntries)
         {
             var key = Read(entry.GetType().GetProperty("Key")!, entry);
-            if (containsKey.Invoke(actual, [key]) is not true)
+            if (!(bool)containsKey.Invoke(actual, [key])!)
                 return $"{Display(path)}: missing dictionary key <{key}>.";
             var failure = Compare(indexer.GetValue(actual, [key]), Read(entry.GetType().GetProperty("Value")!, entry),
-                valueType, $"{path}[{key}]", ancestors, rootIsCollection);
+                valueType, $"{path}[{key}]", ancestors, rootIsCollection, inOrder);
             if (failure is not null)
                 return failure;
         }
@@ -166,7 +168,7 @@ internal static class StructuralComparison
     }
 
     private static string? CompareCollections(IEnumerable actual, IEnumerable expected, Type itemType, string path,
-        List<object> ancestors, bool rootIsCollection, bool ordered)
+        List<object> ancestors, bool rootIsCollection, bool ordered, bool inOrder)
     {
         var actualItems = Items(actual);
         var expectedItems = Items(expected);
@@ -178,7 +180,7 @@ internal static class StructuralComparison
             var itemPath = $"{path}[{e}]";
             if (ordered)
             {
-                var failure = Compare(actualItems[e], expectedItems[e], itemType, itemPath, ancestors, rootIsCollection);
+                var failure = Compare(actualItems[e], expectedItems[e], itemType, itemPath, ancestors, rootIsCollection, inOrder);
                 if (failure is not null)
                     return failure;
                 continue;
@@ -191,7 +193,7 @@ internal static class StructuralComparison
             {
                 if (used[a])
                     continue;
-                var failure = Compare(actualItems[a], expectedItems[e], itemType, itemPath, ancestors, rootIsCollection);
+                var failure = Compare(actualItems[a], expectedItems[e], itemType, itemPath, ancestors, rootIsCollection, inOrder);
                 if (failure is null)
                 {
                     match = a;
@@ -246,13 +248,9 @@ internal static class StructuralComparison
     {
         var equals = type.GetMethod(nameof(object.Equals), [typeof(object)]);
         var overrides = equals is not null && equals.GetBaseDefinition().DeclaringType != equals.DeclaringType;
-        var record = type.GetMethod("<Clone>$", BindingFlags.Public | BindingFlags.Instance) is not null ||
-            type.IsValueType && type.GetMethod("PrintMembers", BindingFlags.NonPublic | BindingFlags.Instance,
-                [typeof(StringBuilder)]) is not null &&
-            type.GetMethod("op_Equality", BindingFlags.Public | BindingFlags.Static, [type, type])?
-                .IsDefined(typeof(CompilerGeneratedAttribute), false) == true;
-        return overrides && !record && !(type.IsDefined(typeof(CompilerGeneratedAttribute), false) &&
-            type.Name.Contains("AnonymousType", StringComparison.Ordinal)) &&
+        var record = type.GetMethod("op_Equality", BindingFlags.Public | BindingFlags.Static, [type, type])?
+            .IsDefined(typeof(CompilerGeneratedAttribute), false) == true;
+        return overrides && !record && !type.IsDefined(typeof(CompilerGeneratedAttribute), false) &&
             !(type.IsGenericType && typeof(ITuple).IsAssignableFrom(type)) &&
             !(type.IsGenericType && type.GetGenericTypeDefinition() == typeof(KeyValuePair<,>));
     }
@@ -287,7 +285,7 @@ internal static class StructuralComparison
     }
     private static Type MemberType(MemberInfo member) => member is PropertyInfo p ? p.PropertyType : ((FieldInfo)member).FieldType;
     private static object? Read(MemberInfo member, object value) => member is PropertyInfo p ? p.GetValue(value) : ((FieldInfo)member).GetValue(value);
-    private static bool IsFirstCollectionItem(string path) => path.StartsWith('[') && path.EndsWith(']') && path.Count(c => c == '[') == 1;
+    private static bool IsFirstCollectionItem(string path) => path.EndsWith(']') && path.Count(c => c == '[') == 1;
     private static string MemberPath(string path, string member) => path.Length == 0 ? member : $"{path}.{member}";
     private static string Display(string path) => path.Length == 0 ? "$" : path.StartsWith('[') ? $"${path}" : $"$.{path}";
     private static string CountDifference(string path, int actual, int expected) => $"{Display(path)}: expected {expected} items, but found {actual}.";

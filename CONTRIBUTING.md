@@ -79,11 +79,28 @@ src/dotnet/
 ├── build.sh, build.cmd, build.ps1               run the build program below
 ├── Ogooreck.Build/                              build targets (Bullseye): compile, verify-format, test, pack, docs
 ├── Ogooreck/                                    the library, published to NuGet as Ogooreck
+├── Ogooreck.Wolverine/                          the Wolverine plug, published to NuGet as Ogooreck.Wolverine
+├── Ogooreck.Marten/                             the Marten plug, published to NuGet as Ogooreck.Marten
+├── Ogooreck.Kafka/                              the Kafka plug, published to NuGet as Ogooreck.Kafka
+├── Ogooreck.RabbitMQ/                           the RabbitMQ plug, published to NuGet as Ogooreck.RabbitMQ
 ├── Ogooreck.Tests/                              library tests
 ├── Ogooreck.Sample.Api/                         sample API used by the API tests
-├── Ogooreck.Sample.Api.Tests/                   API testing samples
-├── Ogooreck.Sample.BusinessLogic.Tests/         C# business logic testing samples
-└── Ogooreck.Sample.BusinessLogic.FSharp.Tests/  F# business logic testing samples
+├── Ogooreck.Api.Tests/                          API testing samples
+├── Ogooreck.Sample.Wolverine/                   sample Wolverine app (in-memory, local queues) used by the messaging tests
+├── Ogooreck.Wolverine.Tests/                    messaging samples: recorded messages, catch-up, actions and publishing
+├── Ogooreck.Wolverine.FSharp.Tests/             F# messaging sample: the same scenario written in F#
+├── Ogooreck.Sample.Aspire.Api/                  sample API hosted by Aspire, exporting traces and metrics over OTLP and producing to Kafka
+├── Ogooreck.Sample.Aspire.AppHost/              Aspire app host with the API and Kafka
+├── Ogooreck.Aspire.Tests/                       out-of-process samples: OtlpReceiver, ExpectTrace and ExpectMetric over OTLP (need Docker)
+├── Ogooreck.Sample.Kafka/                       sample app that publishes to Kafka, used by the broker-side recording tests
+├── Ogooreck.Kafka.Tests/                        Kafka samples (Testcontainers, needs Docker): messages without catch-up, causation
+├── Ogooreck.Sample.Marten/                      sample Marten app (PostgreSQL) used by the appended events tests
+├── Ogooreck.Marten.Tests/                       Marten samples (Testcontainers, needs Docker): appended events, projection catch-up
+├── Ogooreck.NUnit.Tests/                        NUnit sample: one passing and one failing scenario
+├── Ogooreck.MSTest.Tests/                       MSTest sample: one passing and one failing scenario
+├── Ogooreck.TUnit.Tests/                        TUnit sample: one passing and one failing scenario (runs with dotnet run)
+├── Ogooreck.BusinessLogic.Tests/                C# business logic testing samples
+└── Ogooreck.BusinessLogic.FSharp.Tests/         F# business logic testing samples
 ```
 
 ### Adding another language
@@ -118,11 +135,29 @@ The pre-commit hook in [`.githooks`](./.githooks) runs `dotnet format` on the st
 
 The build treats warnings as errors and enables nullable reference types for all projects ([`Directory.Build.props`](./src/dotnet/Directory.Build.props)), so annotate nullable references explicitly.
 
-## Tests and documentation
+## Tests, coverage, and documentation
 
-Tests use [xUnit v3](https://xunit.net/), and the F# samples add [FsCheck](https://fscheck.github.io/FsCheck/) properties. Each test reads as a Given / When / Then scenario through Ogooreck's own API, the same way calling code uses it. The sample test projects are both tests and documentation: [`BankAccountTests`](./src/dotnet/Ogooreck.Sample.BusinessLogic.Tests/Deciders/BankAccountTests.cs) is a good place to start.
+Alongside formatting, `./build.sh test` checks two more things: full test coverage and a documented public API. Both run in CI, so a pull request that drops either won't go green. The existing tests and comments show what's expected, so neither needs to slow you down.
+
+### Tests and the README
+
+Tests use [xUnit v3](https://xunit.net/), and the F# samples add [FsCheck](https://fscheck.github.io/FsCheck/) properties. Each test reads as a Given / When / Then scenario through Ogooreck's own API, the same way calling code uses it. The sample test projects are both tests and documentation: [`BankAccountTests`](./src/dotnet/Ogooreck.BusinessLogic.Tests/Deciders/BankAccountTests.cs) is a good place to start.
 
 The `README.md` is generated. Its code samples come from the sample tests through [MarkdownSnippets](https://github.com/SimonCropp/MarkdownSnippets), so edit [`mdsource/README.source.md`](./mdsource/README.source.md) and the tests, never `README.md` directly. The build regenerates `README.md`, and so does `./build.sh docs`.
+
+### 100% line and branch coverage
+
+`./build.sh test` requires 100% line and branch coverage of the `Ogooreck`, `Ogooreck.Wolverine`, `Ogooreck.Marten`, `Ogooreck.Kafka` and `Ogooreck.RabbitMQ` libraries, collected by [coverlet](https://github.com/coverlet-coverage/coverlet) from all test projects and merged, and the build program checks the result in [`Program.cs`](./src/dotnet/Ogooreck.Build/Program.cs). This does more than confirm the tests run the code they're meant to. It also surfaces code no test can reach. A branch you can't cover is often one that can't execute: a null check on a value that's never null, or a `default` case the type already rules out. When that's the case, the better fix is usually to remove the branch, not to write a test that only satisfies the check. So treat a coverage gap as a question about the code first, and the test second.
+
+We reach the coverage from the outside in. Tests drive the public API the same way calling code does: `Spec.Given(...).When(...).Then(...)`. The internals are covered because real usage runs through them, not because a test reaches into an internal method. Tests written this way survive refactors and read as examples of the API. [`BankAccountTests`](./src/dotnet/Ogooreck.BusinessLogic.Tests/Deciders/BankAccountTests.cs) is a good place to start for business logic, and [`CausationTests`](./src/dotnet/Ogooreck.Api.Tests/Messages/CausationTests.cs) for API specifications.
+
+### Documented public API
+
+The public API is what other code is written against. Its documentation carries the intent a signature can't: what a type is for, when you'd reach for it, how the pieces fit. That's why we document all of it.
+
+The build treats the missing XML documentation warning (`CS1591`) as an error, so every public and protected member of the `Ogooreck`, `Ogooreck.Wolverine`, `Ogooreck.Marten`, `Ogooreck.Kafka` and `Ogooreck.RabbitMQ` libraries needs a `<summary>` comment or the build fails. Don't suppress the warning. Each comment is written for the reader calling the member. It opens with what the thing is and why you'd reach for it, then shows a short `<example><code>` taken from a real test where that helps. It doesn't restate the signature. The members already documented, such as `ExpectTrace` or `ExpectCausation`, are the easiest guide to the tone.
+
+Writing the comment also tells you something about the API. A member you can't describe in a plain sentence is often one whose design is worth a second look while it's still new.
 
 ## Releases
 

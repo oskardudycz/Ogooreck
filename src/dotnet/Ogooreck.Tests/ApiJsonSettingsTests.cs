@@ -6,7 +6,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Ogooreck.API;
 using Xunit;
-using TestContext = Ogooreck.API.TestContext;
 
 namespace Ogooreck.Tests;
 
@@ -48,42 +47,12 @@ public class ApiJsonSettingsTests
     }
 
     [Fact]
-    public void EmptyServicesAndStandaloneContextUseWebDefaults()
+    public void EmptyServicesUseWebDefaults()
     {
         using var provider = new ServiceCollection().BuildServiceProvider();
         var settings = ApiJsonSettings.FromServices(provider);
         Assert.Same(JsonSerializerOptions.Web, settings.Request);
         Assert.Same(JsonSerializerOptions.Web, settings.Response);
-        Assert.Same(settings, new TestContext().JsonSettings);
-    }
-
-    [Fact]
-    public async Task ContextResolvesSettingsLazilyOnceAndDoesNotShareState()
-    {
-        var firstCalls = 0;
-        var secondCalls = 0;
-        var firstSettings = new ApiJsonSettings(new JsonSerializerOptions(), new JsonSerializerOptions());
-        var secondSettings = new ApiJsonSettings(new JsonSerializerOptions(), new JsonSerializerOptions());
-        var first = new TestContext(() =>
-        {
-            Interlocked.Increment(ref firstCalls);
-            return firstSettings;
-        });
-        var second = new TestContext(() =>
-        {
-            Interlocked.Increment(ref secondCalls);
-            return secondSettings;
-        });
-        Assert.Equal(0, firstCalls);
-        Assert.Equal(0, secondCalls);
-
-        await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() =>
-        {
-            Assert.Same(firstSettings, first.JsonSettings);
-            Assert.Same(secondSettings, second.JsonSettings);
-        }, Xunit.TestContext.Current.CancellationToken)));
-        Assert.Equal(1, firstCalls);
-        Assert.Equal(1, secondCalls);
     }
 
     public enum State { Ready }
