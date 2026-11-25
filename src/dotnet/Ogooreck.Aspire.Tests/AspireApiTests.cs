@@ -1,10 +1,11 @@
 using System.Globalization;
 using System.Text.Json;
 using Ogooreck.API;
+using Ogooreck.Aspire.Tests.Fixtures;
 using Xunit;
 using static System.Net.HttpStatusCode;
 using static Ogooreck.API.ApiSpecification;
-using static Ogooreck.Aspire.Tests.ShopRequests;
+using static Ogooreck.Aspire.Tests.Fixtures.ShopRequests;
 
 namespace Ogooreck.Aspire.Tests;
 
@@ -61,7 +62,7 @@ public class AspireApiTests(AspireApi api)
     }
 
     [Fact]
-    public async Task KafkaPlugConsuming_RecordsTheProducedMessage_ReadingTheAppsOwnHeaderNames()
+    public async Task KafkaPluginConsuming_RecordsTheProducedMessage_ReadingTheAppsOwnHeaderNames()
     {
         var cartId = Guid.NewGuid();
 
@@ -74,7 +75,7 @@ public class AspireApiTests(AspireApi api)
     }
 
     [Fact]
-    public async Task KafkaPlugConsuming_ReadsTheAppsOwnIdHeaders_SoCausationIsChecked()
+    public async Task KafkaPluginConsuming_ReadsTheAppsOwnIdHeaders_SoCausationIsChecked()
     {
         var cartId = Guid.NewGuid();
         var kafka = AspireApi.App.Kafka;

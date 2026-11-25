@@ -1,4 +1,4 @@
-using Ogooreck.Wolverine.Tests;
+using Ogooreck.Wolverine.Tests.Fixtures;
 using Xunit;
 using Xunit.Sdk;
 using Xunit.v3;

@@ -64,12 +64,12 @@ Ogooreck works as the Java version does: it records what the app publishes and a
 
 The core hook is `Recorded<T>`, a pipe that code writes to and Ogooreck reads, plus `Recording(recorded, read, catchUp)`. `T` is whatever the tool gives: a Kafka message, a Marten event or a Wolverine envelope. The `read` function turns an item into a message plus its `traceparent`, and for causation checks also returns the message, correlation and causation ids. The optional **catch-up function** tells Ogooreck when the tool is idle, as Java's `whenCaughtUp` does. With catch-up, Ogooreck can check "exactly these messages" and "nothing published". Without it, Ogooreck can only check that the expected messages arrived.
 
-Users don't have to write that wiring. A **plug** does it in one call, `Use(plug)`, and plugs compose (answer 72):
+Users don't have to write that wiring. A **plugin** does it in one call, `Use(plugin)`, and plugins compose (answer 72):
 
 ```csharp
 public static class Messaging
 {
-    public static readonly KafkaPlug Kafka = KafkaPlug.Decorating();
+    public static readonly KafkaPlugin Kafka = KafkaPlugin.Decorating();
 }
 
 public class AppApi() : ApiSpecification<Program>(spec => spec.Use(Messaging.Kafka));
@@ -78,7 +78,7 @@ public class AppApi() : ApiSpecification<Program>(spec => spec.Use(Messaging.Kaf
 ExpectPublishedIn(Messaging.Kafka.Published, new OrderPlaced(cartId), new ShipOrder(cartId))
 ```
 
-Ogooreck ships one plug package per tool, so the core package references no broker client (answer 69):
+Ogooreck ships one plugin package per tool, so the core package references no broker client (answer 69):
 
 | Package | Records through | Catches up through, as Java does |
 |---|---|---|
@@ -87,7 +87,7 @@ Ogooreck ships one plug package per tool, so the core package references no brok
 | `Ogooreck.Marten` | A Marten listener registered in the test host | Marten's projection wait |
 | `Ogooreck.Wolverine` | Wolverine middleware registered in the test host | Wolverine's tracked session |
 
-A user with another tool writes a plug the same way, or calls `Recording(...)` directly. Core helps with both: a DI decorator helper for the app's services, and a message reader for a recommended set of headers (answers 58, 70).
+A user with another tool writes a plugin the same way, or calls `Recording(...)` directly. Core helps with both: a DI decorator helper for the app's services, and a message reader for a recommended set of headers (answers 58, 70).
 
 Recording never blocks the tool, and production code never references anything Ogooreck ships.
 
@@ -102,19 +102,19 @@ A passing test never sleeps. After each step, Ogooreck runs the plugged catch-up
 | `IClassFixture<ApiSpecification<Program>>`, or `ApiSpecification.For<Program>()` | Starts `WebApplicationFactory<Program>`, takes JSON options from the app's services, listens to traces and metrics in-process, deadline 30 s. |
 | `ApiSpecification.For(async () => app.GetEndpoint("api"))`, or `.Host(async () => app.GetEndpoint("api"))` in a subclass's configuration (Aspire, or any base address) | Builds its own client for that address. JSON web defaults, telemetry off, deadline 30 s. |
 
-Rule: Ogooreck turns on what it can do safely by itself. Anything that needs the app or infrastructure is opt-in: plugs, recorders, catch-up, publishing, and the OTLP receiver. Each configuration call replaces its default. Configuration happens before the first step, as in Java, where settings belong to the specification class.
+Rule: Ogooreck turns on what it can do safely by itself. Anything that needs the app or infrastructure is opt-in: plugins, recorders, catch-up, publishing, and the OTLP receiver. Each configuration call replaces its default. Configuration happens before the first step, as in Java, where settings belong to the specification class.
 
-The entry point creates the one app: `ApiSpecification.For<Program>()`, `new ApiSpecification<Program>()` or a subclass. A test that needs other test setup, such as a shorter deadline, another catch-up or a plug option, calls `spec.With(configure)`: it returns a specification that runs on the same running app, with the test setup copied and then changed, and disposing it leaves the app running. Test setup is `Deadline`, `Recording`, `CatchUp`, `Publishing`, `Telemetry`, `Json` and plug options; a variant shares the app's telemetry source unless it sets its own. The host customization is given at construction, `For<Program>(host)` or the base constructor `(host, configure)`, so a variant has no way to change the host (answer 97). A plug that changes the app's services and isn't in the app's setup throws inside `With`: "Plug X changes the app's services, so it can't run on the shared app. Add it to the app's setup, or use WithNewApp(...) to start a separate app for it." `spec.WithNewApp(configure)` is the explicit way to start a separate app, with the same host customization, plugs and test setup, then the changes; each call costs an app start (answer 96). Out of process, a second specification costs only an HTTP client, so `With` is in-process only.
+The entry point creates the one app: `ApiSpecification.For<Program>()`, `new ApiSpecification<Program>()` or a subclass. A test that needs other test setup, such as a shorter deadline, another catch-up or a plugin option, calls `spec.With(configure)`: it returns a specification that runs on the same running app, with the test setup copied and then changed, and disposing it leaves the app running. Test setup is `Deadline`, `Recording`, `CatchUp`, `Publishing`, `Telemetry`, `Json` and plugin options; a variant shares the app's telemetry source unless it sets its own. The host customization is given at construction, `For<Program>(host)` or the base constructor `(host, configure)`, so a variant has no way to change the host (answer 97). A plugin that changes the app's services and isn't in the app's setup throws inside `With`: "Plugin X changes the app's services, so it can't run on the shared app. Add it to the app's setup, or use WithNewApp(...) to start a separate app for it." `spec.WithNewApp(configure)` is the explicit way to start a separate app, with the same host customization, plugins and test setup, then the changes; each call costs an app start (answer 96). Out of process, a second specification costs only an HTTP client, so `With` is in-process only.
 
 When a project uses one setup everywhere, for example Wolverine, it writes that setup once, in one class such as `AppApi`, usually as a few `Use(...)` calls. That class can subclass `ApiSpecification<Program>` and pass its configuration to the base constructor, or a fixture can hold `ApiSpecification.For<Program>()...`. Every test class reuses that class through its framework's fixture mechanism: `IClassFixture`, a collection or assembly fixture, NUnit `SetUpFixture` or MSTest `AssemblyInitialize`. The host starts on the first step, so async hosts like Aspire need no async fixture hook.
 
 ### Checking messages and events without naming a recorder
 
-As in Java, where the specification has one list of published messages and one of appended events, a recorder has a role. `Recording(...)` registers the messages the app publishes, and `Appending(...)` registers the events it appends; the plugs do the same (the Kafka, RabbitMQ and Wolverine plugs record published messages, the Marten plug appended events). `ExpectPublished(messages...)`, `ExpectNothingPublished()`, `ExpectAppended(events...)`, `ExpectNothingAppended()` and the causation nodes `Published(...)`, `Sent(...)` and `Appended(...)` check the specification's one recorder of that role. With none, they fail saying to add a plug or register one; with more than one, they fail saying to name it. A specification with several recorders of one role names the one to check with the `...In` form: `ExpectPublishedIn(broker.Consuming.Published, new OrderPlaced(cartId))`, `ExpectNothingPublishedIn(...)`, `ExpectAppendedIn(...)`, `ExpectNothingAppendedIn(...)`, `PublishedIn(...)`, `SentIn(...)` and `AppendedIn(...)`. The named form has its own name instead of an overload, so no language can pick the wrong one: F# prefers a non-generic overload, and with two overloads it took the recorder for an expected message (answer 98).
+As in Java, where the specification has one list of published messages and one of appended events, a recorder has a role. `Recording(...)` registers the messages the app publishes, and `Appending(...)` registers the events it appends; the plugins do the same (the Kafka, RabbitMQ and Wolverine plugins record published messages, the Marten plugin appended events). `ExpectPublished(messages...)`, `ExpectNothingPublished()`, `ExpectAppended(events...)`, `ExpectNothingAppended()` and the causation nodes `Published(...)`, `Sent(...)` and `Appended(...)` check the specification's one recorder of that role. With none, they fail saying to add a plugin or register one; with more than one, they fail saying to name it. A specification with several recorders of one role names the one to check with the `...In` form: `ExpectPublishedIn(broker.Consuming.Published, new OrderPlaced(cartId))`, `ExpectNothingPublishedIn(...)`, `ExpectAppendedIn(...)`, `ExpectNothingAppendedIn(...)`, `PublishedIn(...)`, `SentIn(...)` and `AppendedIn(...)`. The named form has its own name instead of an overload, so no language can pick the wrong one: F# prefers a non-generic overload, and with two overloads it took the recorder for an expected message (answer 98).
 
 ### An app without a `Program` class
 
-`ApiSpecification.For(host)` takes a started host that the test built itself with `UseTestServer()`, for example `new HostBuilder().ConfigureWebHost(web => web.UseTestServer()...).StartAsync()`. Requests go to its test server; JSON options come from the host's services and traces and metrics are read in-process, as with `For<Program>()`, and plugs can read `AppServices`. The caller owns the host: it configures the app's services when building it, and stops and disposes it. A host without a test server throws, naming `UseTestServer()` and `For(async () => address)` (answer 99).
+`ApiSpecification.For(host)` takes a started host that the test built itself with `UseTestServer()`, for example `new HostBuilder().ConfigureWebHost(web => web.UseTestServer()...).StartAsync()`. Requests go to its test server; JSON options come from the host's services and traces and metrics are read in-process, as with `For<Program>()`, and plugins can read `AppServices`. The caller owns the host: it configures the app's services when building it, and stops and disposes it. A host without a test server throws, naming `UseTestServer()` and `For(async () => address)` (answer 99).
 
 ### Traces and metrics
 
@@ -134,8 +134,8 @@ The examples use a cart and order sample app, and `cartId` is a new `Guid` in ea
    2.2. GIVEN a fixture holding `ApiSpecification.For<Program>().Recording(...)` WHEN a test calls `Spec.Given(...).When(...).Then(...)` THEN it behaves the same as 2.1.
    2.3. GIVEN `AppApi` registered as an xUnit v3 assembly fixture WHEN 3 test classes run THEN one host starts in total.
    2.4. GIVEN `AppApi` as an assembly fixture AND a test class holding `app.With(spec => spec.Deadline(TimeSpan.FromSeconds(1)))` WHEN its expectation never holds THEN it fails after about 1 second, the app's own tests keep the 30-second deadline, and one host starts in total.
-   2.5. GIVEN `app.With(spec => spec.Use(plug))` for a plug that changes services and isn't in the app's setup THEN it throws, naming the plug and `WithNewApp(...)`.
-   2.6. GIVEN `app.WithNewApp(host, spec => spec)` WHEN it runs a step THEN a second host starts, customized by the app's host function and then by `host`, with the app's plugs and test setup.
+   2.5. GIVEN `app.With(spec => spec.Use(plugin))` for a plugin that changes services and isn't in the app's setup THEN it throws, naming the plugin and `WithNewApp(...)`.
+   2.6. GIVEN `app.WithNewApp(host, spec => spec)` WHEN it runs a step THEN a second host starts, customized by the app's host function and then by `host`, with the app's plugins and test setup.
 3. A user customizes the in-process host, so test-only hooks are registered.
    3.1. GIVEN `.Host(f => f.WithWebHostBuilder(...registers a publish observer...))` WHEN a When step publishes `OrderPlaced` THEN the observer adds it to `AppApi.PublishedMessages`.
 4. A user tests an app hosted out of process, so Aspire apps can be tested.
@@ -227,44 +227,44 @@ The examples use a cart and order sample app, and `cartId` is a new `Guid` in ea
     22.3. GIVEN a specification configured with a 2-second deadline AND an app that keeps publishing forever WHEN a step runs THEN the test fails after about 2 seconds, saying that the app kept producing messages for longer than the deadline.
     22.4. GIVEN no catch-up function WHEN steps run THEN each step starts right after the previous one returned, with no delay.
 
-### Plugs
+### Plugins
 
-36. A user plugs a tool with one call, so setups compose instead of growing into per-project setup classes.
-    36.1. GIVEN `.Use(new WolverinePlug().MessageTypes(type => type.Namespace == typeof(OrderPlaced).Namespace)).Use(clock)`, where `clock` is a user class implementing `IPlug` that registers a `FakeTimeProvider` as the app's `TimeProvider` WHEN the When step is an action that advances `clock` by 1 day AND the app expires the cart THEN `ExpectPublishedIn(wolverine.Published, new CartExpired(cartId))` passes, as in 11.1.
-    36.2. GIVEN a user plug that calls `Services(...)`, `Recording(...)`, `CatchUp(...)` and `Publishing(...)` on its `PlugRegistration` WHEN it is passed to `.Use(...)` THEN the app resolves the service the plug registered (a `FakeTimeProvider` as `TimeProvider`), `ExpectPublished` on the plug's recorder passes for the When step's `OrderPlaced(cartId)`, the plug's catch-up function runs once after each step, its publish function receives the `Publish(new PaymentConfirmed(orderId))` step, AND a second specification of the same app without the plug resolves the app's own `TimeProvider`.
-    36.3. GIVEN two plugs that both call `Publishing(...)` WHEN the second is passed to `.Use(...)` THEN the call throws, naming both plugs and saying that a specification has one publish function.
-    36.4. GIVEN a plug that calls `Services(...)` WHEN it is passed to `.Use(...)` on an out-of-process `ApiSpecification` THEN the call throws, naming the plug and saying that decorating the app's services needs `ApiSpecification<TProgram>`.
-    36.5. GIVEN a plug's catch-up function that reads `registration.AppServices` WHEN it runs after the first step THEN it gets the test host's `IServiceProvider`, AND reading it before the host started throws, saying that the host has not started yet.
+36. A user adds a tool with one call, so setups compose instead of growing into per-project setup classes.
+    36.1. GIVEN `.Use(new WolverinePlugin().MessageTypes(type => type.Namespace == typeof(OrderPlaced).Namespace)).Use(clock)`, where `clock` is a user class implementing `ISpecificationPlugin` that registers a `FakeTimeProvider` as the app's `TimeProvider` WHEN the When step is an action that advances `clock` by 1 day AND the app expires the cart THEN `ExpectPublishedIn(wolverine.Published, new CartExpired(cartId))` passes, as in 11.1.
+    36.2. GIVEN a user plugin that calls `Services(...)`, `Recording(...)`, `CatchUp(...)` and `Publishing(...)` on its `SpecificationPluginRegistration` WHEN it is passed to `.Use(...)` THEN the app resolves the service the plugin registered (a `FakeTimeProvider` as `TimeProvider`), `ExpectPublished` on the plugin's recorder passes for the When step's `OrderPlaced(cartId)`, the plugin's catch-up function runs once after each step, its publish function receives the `Publish(new PaymentConfirmed(orderId))` step, AND a second specification of the same app without the plugin resolves the app's own `TimeProvider`.
+    36.3. GIVEN two plugins that both call `Publishing(...)` WHEN the second is passed to `.Use(...)` THEN the call throws, naming both plugins and saying that a specification has one publish function.
+    36.4. GIVEN a plugin that calls `Services(...)` WHEN it is passed to `.Use(...)` on an out-of-process `ApiSpecification` THEN the call throws, naming the plugin and saying that decorating the app's services needs `ApiSpecification<TProgram>`.
+    36.5. GIVEN a plugin's catch-up function that reads `registration.AppServices` WHEN it runs after the first step THEN it gets the test host's `IServiceProvider`, AND reading it before the host started throws, saying that the host has not started yet.
 37. A user decorates one of the app's services, so recording needs no change to production code.
-    37.1. GIVEN the app registers `IProducer<string, string>` as an instance, as a factory, or as a type WHEN a plug calls `services.Decorate<IProducer<string, string>>(inner => wrapper)` THEN the app resolves `wrapper`, which wraps the original registration, with the original lifetime.
+    37.1. GIVEN the app registers `IProducer<string, string>` as an instance, as a factory, or as a type WHEN a plugin calls `services.Decorate<IProducer<string, string>>(inner => wrapper)` THEN the app resolves `wrapper`, which wraps the original registration, with the original lifetime.
     37.2. GIVEN the app doesn't register `IProducer<string, string>` WHEN `Decorate<IProducer<string, string>>(...)` runs THEN the host fails to start, naming the type and saying that the app must register it.
     37.3. GIVEN `CallRecorder.Wrap(inner, nameof(IProducer<string, string>.ProduceAsync), args => recorded.Add(...))` WHEN the app's `ProduceAsync` succeeds THEN its arguments are recorded once, AND WHEN it fails THEN nothing is recorded and the app gets the original exception, not a `TargetInvocationException`.
 38. A user whose app follows the recommended headers writes no `read` function, so plugging a broker is one line.
-    38.1. GIVEN a message with the headers `messageType = OrderPlaced`, `messageId = m1`, `correlationId = c1`, `causationId = m0`, a `traceparent`, and a JSON body WHEN a Kafka or RabbitMQ plug reads it with `MessageTypes(typeof(OrderPlaced))` THEN the result is `Observed(new OrderPlaced(...), traceparent, "m1", "c1", "m0")`.
-    38.2. GIVEN an app that sends `message-type`, `message-id`, `correlation-id` and `causation-id` WHEN the plug is configured with `Headers(new MessageHeaders { MessageType = "message-type", MessageId = "message-id", CorrelationId = "correlation-id", CausationId = "causation-id" })` THEN the result is the same as 38.1.
+    38.1. GIVEN a message with the headers `messageType = OrderPlaced`, `messageId = m1`, `correlationId = c1`, `causationId = m0`, a `traceparent`, and a JSON body WHEN a Kafka or RabbitMQ plugin reads it with `MessageTypes(typeof(OrderPlaced))` THEN the result is `Observed(new OrderPlaced(...), traceparent, "m1", "c1", "m0")`.
+    38.2. GIVEN an app that sends `message-type`, `message-id`, `correlation-id` and `causation-id` WHEN the plugin is configured with `Headers(new MessageHeaders { MessageType = "message-type", MessageId = "message-id", CorrelationId = "correlation-id", CausationId = "causation-id" })` THEN the result is the same as 38.1.
     38.3. GIVEN a message whose `messageType` matches none of the listed types WHEN an expectation reads it THEN it fails, naming the header value and the listed types.
-    38.4. GIVEN a plug configured with its own `Read(...)` function WHEN it reads a message THEN only that function is used.
-39. A user plugs Kafka, so Kafka apps get exact checks in Confluent's default configuration, as in Java.
-    39.1. GIVEN `KafkaPlug.Decorating()` on an in-process app WHEN the When step's request produces `OrderPlaced(cartId)` THEN `ExpectPublishedIn(kafka.Published, new OrderPlaced(cartId))` passes.
+    38.4. GIVEN a plugin configured with its own `Read(...)` function WHEN it reads a message THEN only that function is used.
+39. A user adds Kafka, so Kafka apps get exact checks in Confluent's default configuration, as in Java.
+    39.1. GIVEN `KafkaPlugin.Decorating()` on an in-process app WHEN the When step's request produces `OrderPlaced(cartId)` THEN `ExpectPublishedIn(kafka.Published, new OrderPlaced(cartId))` passes.
     39.2. GIVEN the same AND an app whose `shipping` consumer, resolved from DI with Confluent's default settings, handles `OrderPlaced` in a sequential loop and produces `ShipOrder` WHEN the When step places an order THEN `ExpectPublishedIn(kafka.Published, new OrderPlaced(cartId), new ShipOrder(cartId))` passes as an exact check, AND a next step that reads the order sees it shipped, without `Eventually`.
     39.3. GIVEN the same AND a handler whose first try fails and is retried inside the loop WHEN the When step places an order THEN the result is the same as 39.2.
     39.4. GIVEN the same AND older messages on the topic WHEN the first test of a new host runs THEN its first step starts only after the `shipping` consumer is assigned, and the test passes as in 39.2.
     39.5. GIVEN a specification configured with a 2-second deadline AND a `shipping` handler that blocks WHEN a step runs THEN catch-up fails after about 2 seconds, naming the topic, the partition, the position and the end offset.
-    39.6. GIVEN an Aspire app AND `KafkaPlug.Consuming(bootstrapServers, topics: ["orders"])` WHEN the When step's request produces `OrderPlaced(cartId)` THEN `ExpectPublishedIn(kafka.Published, new OrderPlaced(cartId))` passes once it arrives.
+    39.6. GIVEN an Aspire app AND `KafkaPlugin.Consuming(bootstrapServers, topics: ["orders"])` WHEN the When step's request produces `OrderPlaced(cartId)` THEN `ExpectPublishedIn(kafka.Published, new OrderPlaced(cartId))` passes once it arrives.
     39.7. GIVEN the app from 39.2 AND a second member in group `shipping` that the app builds with `new ConsumerBuilder(...)` and starts with the host WHEN the first step runs THEN it fails, naming group `shipping`, the member's client id, and the ways out (resolve the consumer from DI, or `CatchingUpWith(...)`).
-    39.8. GIVEN the app from 39.2 AND a `billing` consumer in its own group that the app builds with `new ConsumerBuilder(...)` WHEN the test from 39.2 runs THEN it passes: the plug never looks at groups of consumers it didn't wrap.
-40. A user plugs RabbitMQ, so RabbitMQ apps get exact checks, as in Java.
-    40.1. GIVEN `RabbitMQPlug.Decorating()` on an in-process app WHEN the When step's request publishes `OrderPlaced(orderId)` THEN `ExpectPublishedIn(rabbitmq.Published, new OrderPlaced(orderId))` passes.
+    39.8. GIVEN the app from 39.2 AND a `billing` consumer in its own group that the app builds with `new ConsumerBuilder(...)` WHEN the test from 39.2 runs THEN it passes: the plugin never looks at groups of consumers it didn't wrap.
+40. A user adds RabbitMQ, so RabbitMQ apps get exact checks, as in Java.
+    40.1. GIVEN `RabbitMQPlugin.Decorating()` on an in-process app WHEN the When step's request publishes `OrderPlaced(orderId)` THEN `ExpectPublishedIn(rabbitmq.Published, new OrderPlaced(orderId))` passes.
     40.2. GIVEN the same AND an app whose consumer on queue `shipping` handles `OrderPlaced` and publishes `ShipOrder` WHEN the When step places an order THEN `ExpectPublishedIn(rabbitmq.Published, new OrderPlaced(orderId), new ShipOrder(orderId))` passes as an exact check, AND a next step that reads the order sees it shipped, without `Eventually`.
     40.3. GIVEN the same with `ConsumerDispatchConcurrency = 4` WHEN the When step places 20 orders THEN all 20 are shipped when catch-up ends.
     40.4. GIVEN the same AND a handler that nacks each message with requeue on its first try WHEN the When step places an order THEN the result is the same as 40.2.
     40.5. GIVEN the same WHEN catch-up probes the `shipping` queue THEN the app's handler never receives the probe.
     40.6. GIVEN a specification configured with a 2-second deadline AND a `shipping` handler that blocks WHEN a step runs THEN catch-up fails after about 2 seconds, naming the queue and one running handler.
     40.7. GIVEN the same app AND a second consumer on `shipping` that the app creates on its own connection WHEN a step runs THEN catch-up fails, naming queue `shipping`, 2 consumers, 1 decorated, and the ways out (resolve the consumer from DI, or `CatchingUpWith(...)`).
-    40.8. GIVEN a consumer on its own connection on queue `billing`, bound to exchange `shop`, that the decorated consumers don't read WHEN a step publishes to `shop` THEN catch-up passes: the plug never looks at queues its decorated consumers don't read.
-41. A user plugs Marten or Wolverine, so the sample setup classes need no recording code.
-    41.1. GIVEN `.Use(new MartenPlug())` WHEN the criteria 19.1, 19.2 and 22.1 run THEN they pass with `marten.Appended` as the recorder.
-    41.2. GIVEN `.Use(new WolverinePlug())` WHEN the Wolverine sample's criteria 15, 17, 20 and 12.1 run THEN they pass with `wolverine.Published` as the recorder and `Publish` steps going through Wolverine's `IMessageBus`.
+    40.8. GIVEN a consumer on its own connection on queue `billing`, bound to exchange `shop`, that the decorated consumers don't read WHEN a step publishes to `shop` THEN catch-up passes: the plugin never looks at queues its decorated consumers don't read.
+41. A user adds Marten or Wolverine, so the sample setup classes need no recording code.
+    41.1. GIVEN `.Use(new MartenPlugin())` WHEN the criteria 19.1, 19.2 and 22.1 run THEN they pass with `marten.Appended` as the recorder.
+    41.2. GIVEN `.Use(new WolverinePlugin())` WHEN the Wolverine sample's criteria 15, 17, 20 and 12.1 run THEN they pass with `wolverine.Published` as the recorder and `Publish` steps going through Wolverine's `IMessageBus`.
 
 ### HTTP response
 
@@ -362,7 +362,7 @@ The examples use a cart and order sample app, and `cartId` is a new `Guid` in ea
   - Metrics: name, sum and gauge data points, and histogram data points' counts, with their attributes and aggregation temporality.
 
   There is no code generation and no build step. Core gains a runtime dependency on `Google.Protobuf`.
-- Four plug packages ship next to core, each referencing `Ogooreck` and its tool's client: `Ogooreck.Kafka` (`Confluent.Kafka`), `Ogooreck.RabbitMQ` (`RabbitMQ.Client` 7), `Ogooreck.Marten` (`Marten`) and `Ogooreck.Wolverine` (`WolverineFx`). Core references none of them (answer 69). All five packages get version 1.0.0 from the same `dotnet-1.0.0` tag.
+- Four plugin packages ship next to core, each referencing `Ogooreck` and its tool's client: `Ogooreck.Kafka` (`Confluent.Kafka`), `Ogooreck.RabbitMQ` (`RabbitMQ.Client` 7), `Ogooreck.Marten` (`Marten`) and `Ogooreck.Wolverine` (`WolverineFx`). Core references none of them (answer 69). All five packages get version 1.0.0 from the same `dotnet-1.0.0` tag.
 - Business logic specifications are not changed.
 
 ### Types
@@ -385,7 +385,7 @@ Configuration calls change the instance and return it. Each one is optional and 
 |---|---|
 | `Host(Func<WebApplicationFactory<TProgram>, WebApplicationFactory<TProgram>>)` | Customizes the in-process factory. `ApiSpecification<TProgram>` only. |
 | `Host(Func<Task<Uri>> baseAddress)` / `Host(Func<Task<Uri>> baseAddress, Func<HttpMessageHandler> handler)` | Sets or replaces the out-of-process address. `ApiSpecification` only. |
-| `Use(IPlug)` | Adds a plug (see "Plugs"). Repeatable. |
+| `Use(ISpecificationPlugin)` | Adds a plugin (see "Plugins"). Repeatable. |
 | `Recording<T>(Recorded<T>, Func<T, Observed> read)` / `Recording<T>(Recorded<T>, Func<T, Observed> read, Func<CancellationToken, Task> catchUp)` | Adds a message or event source. Repeatable. |
 | `CatchUp(Func<CancellationToken, Task>)` | Adds a catch-up function that isn't tied to a recorder. Repeatable. |
 | `CatchUp(Func<Func<CancellationToken, Task>, CancellationToken, Task> aroundStep)` / `Recording<T>(Recorded<T>, Func<T, Observed> read, Func<Func<CancellationToken, Task>, CancellationToken, Task> aroundStep)` | A catch-up that wraps each step, for tools whose test support must surround the work, such as Wolverine's tracked sessions (`TrackActivity().ExecuteAndWaitAsync(...)`). Ogooreck passes the step as the function to run; catch-up is done when the wrapper returns. Counts as catch-up for the exact checks. |
@@ -398,7 +398,7 @@ Defaults:
 
 - `ApiSpecification<TProgram>`: a plain `WebApplicationFactory<TProgram>`, JSON options from the app's services (`ApiJsonSettings.FromServices`), a new `TelemetrySources.InProcess()` source for each specification, and a 30-second deadline.
 - `ApiSpecification`: `ApiJsonSettings.Web`, `TelemetrySources.Off`, and a 30-second deadline.
-- Neither has plugs, recorders, catch-up or publishing by default.
+- Neither has plugins, recorders, catch-up or publishing by default.
 
 The host (the factory, or the base address function and its client) starts on the first step and is reused for the specification's lifetime. Disposal stops what the specification created: its host and handler, and a telemetry source it created itself (the default `TelemetrySources.InProcess()`). A telemetry source or `OtlpReceiver` passed in with `Telemetry(...)` belongs to the caller, who disposes it, as with an out-of-process app (answer 56).
 
@@ -482,35 +482,35 @@ public sealed record RecordedMeasurement(string Instrument, IReadOnlyDictionary<
 - With no catch-up functions at all, no catch-up runs.
 - A wrapping catch-up (`aroundStep`) must call the step exactly once. If it returns without calling it, or calls it twice, the step fails, saying which catch-up did so. One deadline covers a step's whole catch-up, wrapping and plain functions together, as Java's single deadline per `whenCaughtUp` loop does. The wrapper's waiting is bounded by that deadline. The step itself is bounded only by the `Then` token, as without a wrapper (answer 54).
 
-### Plugs
+### Plugins
 
-A plug is a class that wires one tool into a specification. Core defines it; the plug packages and users implement it (answer 72).
+A plugin is a class that wires one tool into a specification. Core defines it; the plugin packages and users implement it (answer 72).
 
 ```csharp
-public interface IPlug { void Plug(PlugRegistration registration); }
+public interface ISpecificationPlugin { void Register(SpecificationPluginRegistration registration); }
 
-public sealed class PlugRegistration {
-    public PlugRegistration Services(Action<IServiceCollection> configure);   // ApiSpecification<TProgram> only
-    public PlugRegistration Recording<T>(Recorded<T> recorded, Func<T, Observed> read);
-    public PlugRegistration Recording<T>(Recorded<T> recorded, Func<T, Observed> read, Func<CancellationToken, Task> catchUp);
-    public PlugRegistration Recording<T>(Recorded<T> recorded, Func<T, Observed> read,
+public sealed class SpecificationPluginRegistration {
+    public SpecificationPluginRegistration Services(Action<IServiceCollection> configure);   // ApiSpecification<TProgram> only
+    public SpecificationPluginRegistration Recording<T>(Recorded<T> recorded, Func<T, Observed> read);
+    public SpecificationPluginRegistration Recording<T>(Recorded<T> recorded, Func<T, Observed> read, Func<CancellationToken, Task> catchUp);
+    public SpecificationPluginRegistration Recording<T>(Recorded<T> recorded, Func<T, Observed> read,
         Func<Func<CancellationToken, Task>, CancellationToken, Task> aroundStep);
-    public PlugRegistration CatchUp(Func<CancellationToken, Task> catchUp);
-    public PlugRegistration Publishing(Func<PublishRequest, CancellationToken, Task> publish);
-    public PlugRegistration Starting(Func<CancellationToken, Task> start);     // after the host starts, before the first step
+    public SpecificationPluginRegistration CatchUp(Func<CancellationToken, Task> catchUp);
+    public SpecificationPluginRegistration Publishing(Func<PublishRequest, CancellationToken, Task> publish);
+    public SpecificationPluginRegistration Starting(Func<CancellationToken, Task> start);     // after the host starts, before the first step
     public IServiceProvider AppServices { get; }                               // the test host's services, once it has started
     public TimeSpan Deadline { get; }
 }
 ```
 
-- `Use(plug)` calls `plug.Plug(registration)` at once. Each registration call does what the specification's call of the same name does. Plugs and direct calls mix freely, and their recorders and catch-ups run in the order they were added.
-- A plug made from another one through an option (see the Kafka and RabbitMQ plugs) replaces it: when a specification already uses `Messaging.Kafka` and a test class calls `Use(Messaging.Kafka.CatchingUpWith(...))`, the second plug takes the first one's place, so nothing is decorated or recorded twice.
-- `Deadline` on `PlugRegistration` gives the specification's deadline, so a plug bounds its tool's own waits (Marten's projection wait, Wolverine's tracked session, the Kafka assignment wait) with it.
-- `Services(...)` adds to the test host through `ConfigureTestServices`, after the `Host(...)` customization. On an out-of-process `ApiSpecification` it throws, naming the plug and saying that decorating the app's services needs `ApiSpecification<TProgram>`.
-- A specification has one publish function. A second `Publishing(...)`, from a plug or a direct call, throws, naming both sources.
+- `Use(plugin)` calls `plugin.Register(registration)` at once. Each registration call does what the specification's call of the same name does. Plugins and direct calls mix freely, and their recorders and catch-ups run in the order they were added.
+- A plugin made from another one through an option (see the Kafka and RabbitMQ plugins) replaces it: when a specification already uses `Messaging.Kafka` and a test class calls `Use(Messaging.Kafka.CatchingUpWith(...))`, the second plugin takes the first one's place, so nothing is decorated or recorded twice.
+- `Deadline` on `SpecificationPluginRegistration` gives the specification's deadline, so a plugin bounds its tool's own waits (Marten's projection wait, Wolverine's tracked session, the Kafka assignment wait) with it.
+- `Services(...)` adds to the test host through `ConfigureTestServices`, after the `Host(...)` customization. On an out-of-process `ApiSpecification` it throws, naming the plugin and saying that decorating the app's services needs `ApiSpecification<TProgram>`.
+- A specification has one publish function. A second `Publishing(...)`, from a plugin or a direct call, throws, naming both sources.
 - `AppServices` returns the test host's `IServiceProvider`. Before the host starts, and on an out-of-process specification, it throws with a message saying why.
-- `Starting(...)` functions run once, after the host starts and before the first step, in the order they were added. A failure fails the first step, naming the plug.
-- A plug that holds resources, such as `KafkaPlug.Consuming`'s consumer, implements `IAsyncDisposable` and belongs to the caller, like an `OtlpReceiver` passed to `Telemetry(...)` (answer 56). Plugs are usually static fields shared by every specification of a test project, as the recorders are now.
+- `Starting(...)` functions run once, after the host starts and before the first step, in the order they were added. A failure fails the first step, naming the plugin.
+- A plugin that holds resources, such as `KafkaPlugin.Consuming`'s consumer, implements `IAsyncDisposable` and belongs to the caller, like an `OtlpReceiver` passed to `Telemetry(...)` (answer 56). Plugins are usually static fields shared by every specification of a test project, as the recorders are now.
 
 #### Decorating the app's services
 
@@ -521,48 +521,48 @@ public sealed class PlugRegistration {
 #### Reading broker messages
 
 - `MessageHeaders` holds the header names. The defaults are Java's (answer 70): `messageType`, `messageId`, `correlationId`, `causationId` and `traceparent`.
-- `MessageReader.Read(Func<string, string?> header, ReadOnlyMemory<byte> body)` turns a broker message's headers, as UTF-8 text, and its body into an `Observed`. Each plug adapts its client's headers and body to this; a message value that is neither `string` nor bytes needs a custom `Read`. It finds the message's .NET type from the `messageType` header through a type lookup and deserializes the body as JSON with `JsonSerializerOptions.Web`. Options:
+- `MessageReader.Read(Func<string, string?> header, ReadOnlyMemory<byte> body)` turns a broker message's headers, as UTF-8 text, and its body into an `Observed`. Each plugin adapts its client's headers and body to this; a message value that is neither `string` nor bytes needs a custom `Read`. It finds the message's .NET type from the `messageType` header through a type lookup and deserializes the body as JSON with `JsonSerializerOptions.Web`. Options:
   - `MessageTypes(params Type[])`: the header value matches a listed type's `FullName`, then its `Name`.
   - `MessageTypes(Func<string, Type?>)`: the user's own lookup.
   - `Headers(MessageHeaders)`: the app's own header names.
   - `Json(JsonSerializerOptions)`: the app's JSON options.
 - The reader takes the `traceparent` and ids before the type. A message whose type header is missing or matches no type becomes an `UnknownMessage(string? TypeHeader, IReadOnlyList<Type> ListedTypes)` in its `Observed`. An expectation fails on it only when it is one of the When step's messages, naming the header, its value and the listed types; other steps' and other tests' unknown messages are ignored like any other message of theirs.
-- The Kafka and RabbitMQ plugs read with a `MessageReader` by default. Each takes the same options, plus `Read(Func<T, Observed>)`, which replaces the reader entirely (answer 58).
+- The Kafka and RabbitMQ plugins read with a `MessageReader` by default. Each takes the same options, plus `Read(Func<T, Observed>)`, which replaces the reader entirely (answer 58).
 
 #### Kafka (`Ogooreck.Kafka`)
 
-- `KafkaPlug.Decorating<TKey, TValue>()`, with `KafkaPlug.Decorating()` as the `string, string` shorthand, decorates the app's `IProducer<TKey, TValue>` and `IConsumer<TKey, TValue>` registrations that exist, so producer-only and consumer-only apps work. When the app registers neither, the host fails to start, naming both types. It records each `ProduceAsync` that succeeds, as its topic and `Message<TKey, TValue>`. `Published` is its `Recorded<KafkaMessage<TKey, TValue>>`.
+- `KafkaPlugin.Decorating<TKey, TValue>()`, with `KafkaPlugin.Decorating()` as the `string, string` shorthand, decorates the app's `IProducer<TKey, TValue>` and `IConsumer<TKey, TValue>` registrations that exist, so producer-only and consumer-only apps work. When the app registers neither, the host fails to start, naming both types. It records each `ProduceAsync` that succeeds, as its topic and `Message<TKey, TValue>`. `Published` is its `Recorded<KafkaMessage<TKey, TValue>>`.
 - It learns each decorated consumer's topics from `Subscribe` and `Assign`, and tracks whether the consumer is inside `Consume`.
 - Before the first step (`Starting`), it waits until every decorated consumer has an assignment, its fetch position is known, and the groups of the decorated consumers are stable (answer 95: never other groups on the broker), and reads the end offsets of the assigned partitions. Waiting for every partition would never end when another member of the group holds some (answer 83). With Confluent's default `AutoOffsetReset = Latest`, messages produced before the assignment are skipped by the app, so without this wait the first test's messages would be lost (answer 80). Past the deadline, the first step fails, naming the consumer's topics.
 - Catch-up, as Java's `KafkaMessageBus.whenCaughtUp` does, but from the consumer the app runs (answers 75, 78, 80): at the start of each round, it reads the end offsets of the consumers' partitions, and waits until each decorated consumer is inside `Consume` with its position at or past those end offsets. A partition whose position is still unset counts as caught up when its end offset hasn't moved since the assignment. Past the deadline, it fails, naming the topic, the partition, the position and the end offset.
 - This works with Confluent's default consumer settings (auto commit, auto offset store) and with retries inside the loop, for a consume loop that handles each message before it calls `Consume` again, as Confluent documents it. The spike passed 10 of 10 rounds in each case (answer 80). Loops that hand messages to other tasks are not supported; the docs say such apps need their own catch-up through `CatchingUpWith(...)` (answer 78).
-- It checks for consumers it can't wait for (answers 82, 83, 86). Before the first step and again at the start of every catch-up round, it lists the members of the groups of the decorated consumers. Another member in such a group takes some of the partitions, so the plug's wait would miss the messages it handles. A member that isn't a decorated consumer fails the step: "Consumer group shipping has member shipping-worker-2, which Ogooreck didn't wrap, so it can't wait for the partitions it holds. Resolve that consumer from DI, or configure the Kafka plug with .CatchingUpWith(...) with your own wait." Groups of consumers the plug didn't wrap are never looked at (answer 95).
+- It checks for consumers it can't wait for (answers 82, 83, 86). Before the first step and again at the start of every catch-up round, it lists the members of the groups of the decorated consumers. Another member in such a group takes some of the partitions, so the plugin's wait would miss the messages it handles. A member that isn't a decorated consumer fails the step: "Consumer group shipping has member shipping-worker-2, which Ogooreck didn't wrap, so it can't wait for the partitions it holds. Resolve that consumer from DI, or configure the Kafka plugin with .CatchingUpWith(...) with your own wait." Groups of consumers the plugin didn't wrap are never looked at (answer 95).
 - It doesn't see, and the docs say so: consumers that use `Assign()` without a group, which the broker doesn't list; and a consumer that joins after a check, which the next round's check reports.
-- `CatchingUpWith(Func<CancellationToken, Task>)` replaces the plug's catch-up and its check with the user's own wait, the extension point of answer 78. No other strategy is built in (answer 79).
-- Every option (`CatchingUpWith`, `Headers`, `Json`, `Read`, `MessageTypes`) returns a new plug that shares the same `Published` recorder, so a shared setup class defines the plug once and a test class uses an option on the same app through `app.With(spec => spec.Use(Messaging.Kafka.CatchingUpWith(...)))`. A plug keeps its per-app state in the app's services, keyed by the plug family, so the plug made through an option finds the app's consumers. The plug types users hold are public: `KafkaPlug<TKey, TValue>`, `KafkaConsumingPlug` and `KafkaMessage<TKey, TValue>` (a recorded message: its topic and the Kafka message). Nothing in the app changes (answer 87).
-- `KafkaPlug.Consuming(Func<Task<string>> bootstrapServers, string[] topics)` is for out-of-process apps. On `Starting`, it starts a test-side consumer with its own new group, reading from the end of the topics, and records each message. It can't see the app's consumers, so it has no catch-up, and checks are subsequence checks (answer 13). Its consumer runs until the caller disposes the plug.
+- `CatchingUpWith(Func<CancellationToken, Task>)` replaces the plugin's catch-up and its check with the user's own wait, the extension point of answer 78. No other strategy is built in (answer 79).
+- Every option (`CatchingUpWith`, `Headers`, `Json`, `Read`, `MessageTypes`) returns a new plugin that shares the same `Published` recorder, so a shared setup class defines the plugin once and a test class uses an option on the same app through `app.With(spec => spec.Use(Messaging.Kafka.CatchingUpWith(...)))`. A plugin keeps its per-app state in the app's services, keyed by the plugin family, so the plugin made through an option finds the app's consumers. The plugin types users hold are public: `KafkaPlugin<TKey, TValue>`, `KafkaConsumingPlugin` and `KafkaMessage<TKey, TValue>` (a recorded message: its topic and the Kafka message). Nothing in the app changes (answer 87).
+- `KafkaPlugin.Consuming(Func<Task<string>> bootstrapServers, string[] topics)` is for out-of-process apps. On `Starting`, it starts a test-side consumer with its own new group, reading from the end of the topics, and records each message. It can't see the app's consumers, so it has no catch-up, and checks are subsequence checks (answer 13). Its consumer runs until the caller disposes the plugin.
 
 #### RabbitMQ (`Ogooreck.RabbitMQ`)
 
-- `RabbitMQPlug.Decorating()` decorates the app's `IConnection`, the channels it creates, and the consumers registered on them. It records each `BasicPublishAsync` that succeeds, as its exchange, routing key, properties and body. `Published` is its `Recorded<RabbitMQMessage>`.
+- `RabbitMQPlugin.Decorating()` decorates the app's `IConnection`, the channels it creates, and the consumers registered on them. It records each `BasicPublishAsync` that succeeds, as its exchange, routing key, properties and body. `Published` is its `Recorded<RabbitMQMessage>`.
 - It learns the queues the app consumes from `BasicConsumeAsync`. Its catch-up works as Java's `RabbitMQMessageBus` does, with a probe per queue, plus tracking in the decorated consumer so that it holds beyond Java's conditions (answers 75, 76, 80):
   - In each round, it publishes a probe to each consumed queue through the default exchange, with a `catchUpProbe` header. The decorated consumer recognizes the probe, acknowledges it when the consumer uses manual acknowledgement, and never passes it to the app's handler.
   - The decorated consumer marks each delivery tag done when the app's handler returns, and counts the handlers running. Each `BasicNack` or `BasicReject` with requeue through a decorated channel counts as pending until its redelivery arrives.
   - A probe counts when every lower delivery tag on its channel is done, no handler is running, and no requeue is pending.
   - Past the deadline, it fails, naming the queues whose probe didn't count, with the number of running handlers and pending requeues.
-- This works with the client's defaults, with `ConsumerDispatchConcurrency` above 1, and with nack-and-requeue retries. The spike passed 10 of 10 rounds in each case; the plain probe failed all rounds with concurrency 4 and with requeue (answer 80). Retries through dead-letter exchanges with a TTL move the message without the app's client, so the plug can't see them; the docs say so.
-- It checks for consumers it can't wait for (answers 82, 86). At the start of every catch-up round, it passively declares each queue the decorated consumers read. Another consumer on such a queue can take the probe. A queue with more consumers than the decorated ones fails the step: "Queue shipping has 2 consumers, but Ogooreck decorates 1. Resolve that consumer from DI, or configure the RabbitMQ plug with .CatchingUpWith(...) with your own wait." Queues the decorated consumers don't read are never looked at (answer 95).
-- `CatchingUpWith(...)` replaces the plug's catch-up and its check with the user's own, and every option returns a new plug sharing the same recorder, as for Kafka.
+- This works with the client's defaults, with `ConsumerDispatchConcurrency` above 1, and with nack-and-requeue retries. The spike passed 10 of 10 rounds in each case; the plain probe failed all rounds with concurrency 4 and with requeue (answer 80). Retries through dead-letter exchanges with a TTL move the message without the app's client, so the plugin can't see them; the docs say so.
+- It checks for consumers it can't wait for (answers 82, 86). At the start of every catch-up round, it passively declares each queue the decorated consumers read. Another consumer on such a queue can take the probe. A queue with more consumers than the decorated ones fails the step: "Queue shipping has 2 consumers, but Ogooreck decorates 1. Resolve that consumer from DI, or configure the RabbitMQ plugin with .CatchingUpWith(...) with your own wait." Queues the decorated consumers don't read are never looked at (answer 95).
+- `CatchingUpWith(...)` replaces the plugin's catch-up and its check with the user's own, and every option returns a new plugin sharing the same recorder, as for Kafka.
 
 #### Marten (`Ogooreck.Marten`)
 
-- `MartenPlug` registers a listener through `ConfigureMarten` in the test host and records each appended `IEvent`. `Appended` is its `Recorded<IEvent>`. It reads the event's data, the `traceparent` header, the event id, and the correlation and causation ids.
-- Its catch-up waits with `WaitForNonStaleProjectionDataAsync` through `AppServices`, bounded by the deadline, when the store has any events. `new MartenPlug().WithoutCatchUp()` records without catch-up; like the other plugs' options, it returns a new plug sharing the same recorder.
+- `MartenPlugin` registers a listener through `ConfigureMarten` in the test host and records each appended `IEvent`. `Appended` is its `Recorded<IEvent>`. It reads the event's data, the `traceparent` header, the event id, and the correlation and causation ids.
+- Its catch-up waits with `WaitForNonStaleProjectionDataAsync` through `AppServices`, bounded by the deadline, when the store has any events. `new MartenPlugin().WithoutCatchUp()` records without catch-up; like the other plugins' options, it returns a new plugin sharing the same recorder.
 - It works in-process only.
 
 #### Wolverine (`Ogooreck.Wolverine`)
 
-- `WolverinePlug` records every envelope the app publishes, as Java's `bus.use(recorded::add)` does: inside its wrapping catch-up, it adds the tracked session's sent envelopes to `Published` (answers 90, 91). `MessageTypes(params Type[])` and `MessageTypes(Func<Type, bool>)` keep only the chosen types and return a new plug that shares `Published`. It catches up by wrapping each step in a tracked session (`TrackActivity().ExecuteAndWaitAsync(...)`), as the Wolverine sample does now (answer 52). `Published` is its `Recorded<Envelope>`. It also sets the publish function, so `Publish` steps go through Wolverine's `IMessageBus`.
+- `WolverinePlugin` records every envelope the app publishes, as Java's `bus.use(recorded::add)` does: inside its wrapping catch-up, it adds the tracked session's sent envelopes to `Published` (answers 90, 91). `MessageTypes(params Type[])` and `MessageTypes(Func<Type, bool>)` keep only the chosen types and return a new plugin that shares `Published`. It catches up by wrapping each step in a tracked session (`TrackActivity().ExecuteAndWaitAsync(...)`), as the Wolverine sample does now (answer 52). `Published` is its `Recorded<Envelope>`. It also sets the publish function, so `Publish` steps go through Wolverine's `IMessageBus`.
 - It works in-process only. Its tests run serially, as Wolverine's docs keep tracked-session tests in one collection (answer 53).
 
 ### Message expectations
@@ -631,15 +631,15 @@ Each sample is a small app and a test project in the .NET solution, run by `./bu
 | Sample | Shows |
 |---|---|
 | Existing API sample, migrated | Requests, `StepContext.CreatedId()`, response expectations, in-process traces and metrics, and `Eventually`. |
-| Kafka, Testcontainers | `KafkaPlug.Decorating` with the recommended headers read without a `read` function, and exact checks through consumer catch-up: the app gains a `shipping` consumer, resolved from DI with Confluent's default settings and a sequential loop, that handles `OrderPlaced`, produces `ShipOrder` and marks the order shipped. Criteria 18 and 32 (subsequence checks, parallel tests on one topic, cancellation) run on `KafkaPlug.Consuming`, which has no catch-up. |
-| RabbitMQ, Testcontainers (new, answer 71) | `RabbitMQPlug.Decorating` on a small in-process app on `RabbitMQ.Client`: an order endpoint publishes `OrderPlaced`, a consumer on queue `shipping` publishes `ShipOrder` and marks the order shipped, and the probe catch-up makes the next request see it. |
-| Marten, PostgreSQL via Testcontainers | `MartenPlug`: appended events, `ExpectAppended`, and projection catch-up. |
-| Wolverine, in-memory (local queues) | `WolverinePlug` plus a user plug for the fake clock, Wolverine's trace propagation, catch-up through Wolverine's tracked sessions, exact `ExpectPublished`, `ExpectNothingPublished`, `ExpectCausation`, the `Publish` step, `Eventually`. Its tests run serially, as Wolverine's docs keep tracked-session tests in one collection. |
-| Aspire | An AppHost with the API and Kafka. `OtlpReceiver` is created first and its `Endpoint` is passed to the app. Also shows `ApiSpecification.For(async () => app.GetEndpoint("api"))` and a `.Host(...)` subclass, `KafkaPlug.Consuming`, `ExpectTrace`, a tag-filtered `ExpectMetric`, and `WaitForMetricsExport`. |
+| Kafka, Testcontainers | `KafkaPlugin.Decorating` with the recommended headers read without a `read` function, and exact checks through consumer catch-up: the app gains a `shipping` consumer, resolved from DI with Confluent's default settings and a sequential loop, that handles `OrderPlaced`, produces `ShipOrder` and marks the order shipped. Criteria 18 and 32 (subsequence checks, parallel tests on one topic, cancellation) run on `KafkaPlugin.Consuming`, which has no catch-up. |
+| RabbitMQ, Testcontainers (new, answer 71) | `RabbitMQPlugin.Decorating` on a small in-process app on `RabbitMQ.Client`: an order endpoint publishes `OrderPlaced`, a consumer on queue `shipping` publishes `ShipOrder` and marks the order shipped, and the probe catch-up makes the next request see it. |
+| Marten, PostgreSQL via Testcontainers | `MartenPlugin`: appended events, `ExpectAppended`, and projection catch-up. |
+| Wolverine, in-memory (local queues) | `WolverinePlugin` plus a user plugin for the fake clock, Wolverine's trace propagation, catch-up through Wolverine's tracked sessions, exact `ExpectPublished`, `ExpectNothingPublished`, `ExpectCausation`, the `Publish` step, `Eventually`. Its tests run serially, as Wolverine's docs keep tracked-session tests in one collection. |
+| Aspire | An AppHost with the API and Kafka. `OtlpReceiver` is created first and its `Endpoint` is passed to the app. Also shows `ApiSpecification.For(async () => app.GetEndpoint("api"))` and a `.Host(...)` subclass, `KafkaPlugin.Consuming`, `ExpectTrace`, a tag-filtered `ExpectMetric`, and `WaitForMetricsExport`. |
 | F# | A scenario from the Wolverine sample, written in F# and formatted with Fantomas. |
 | NUnit, MSTest, TUnit | One tiny test project each, against the existing API sample app, with one passing and one failing scenario. |
 
-The existing API, Kafka, RabbitMQ, Marten, Wolverine and Aspire samples use xUnit. Their setup classes (`KafkaApi`, `MartenApi`, `AppApi`, `AspireApi`) keep only app settings, such as connection strings, and `Use(...)` calls; recording, reading and catch-up code moves into the plugs, and the side consumers in `KafkaBroker` and `AspireApp` are replaced by the plugs. Checks that a test needs to prove a message really was published (for example that a Given step's message exists, for 16.1 and 16.4) stay as test code next to the setup class. The broker samples run one app per test project through an assembly fixture (2.3); a test that needs other settings, such as 39.5 and 40.6, starts its own app with its own consumer group or queue names through test settings.
+The existing API, Kafka, RabbitMQ, Marten, Wolverine and Aspire samples use xUnit. Their setup classes (`KafkaApi`, `MartenApi`, `AppApi`, `AspireApi`) keep only app settings, such as connection strings, and `Use(...)` calls; recording, reading and catch-up code moves into the plugins, and the side consumers in `KafkaBroker` and `AspireApp` are replaced by the plugins. Checks that a test needs to prove a message really was published (for example that a Given step's message exists, for 16.1 and 16.4) stay as test code next to the setup class. The broker samples run one app per test project through an assembly fixture (2.3); a test that needs other settings, such as 39.5 and 40.6, starts its own app with its own consumer group or queue names through test settings.
 
 ### Documentation
 
@@ -647,10 +647,10 @@ The existing API, Kafka, RabbitMQ, Marten, Wolverine and Aspire samples use xUni
 - The README explains:
   - Why trace context must propagate, and how each sample does it.
   - That catch-up is the preferred way to wait, and `Eventually` is for apps with no idle signal.
-  - How to plug each tool with `Use(...)`, how to write a plug for another tool with `Decorate`, `CallRecorder` and `MessageReader`, and the recommended headers.
-  - Exactly what each plug checks for consumers it can't wait for, what it doesn't see, and the way out (`CatchingUpWith(...)`), and that the plugs wait only for consumers the app gets from DI. Ogooreck creates no broker resources; the app or its AppHost creates topics and queues.
+  - How to add each tool with `Use(...)`, how to write a plugin for another tool with `Decorate`, `CallRecorder` and `MessageReader`, and the recommended headers.
+  - Exactly what each plugin checks for consumers it can't wait for, what it doesn't see, and the way out (`CatchingUpWith(...)`), and that the plugins wait only for consumers the app gets from DI. Ogooreck creates no broker resources; the app or its AppHost creates topics and queues.
   - That each copy of the app a test project starts runs its own consumers, so two copies in one Kafka group or on one RabbitMQ queue split the messages and one test can read another copy's state. Run one app per test project through an assembly fixture, or give each copy its own group or queue names through test settings, for example `UseSetting("Kafka:GroupId", $"shipping-{Guid.NewGuid()}")`.
-  - What each plug's catch-up covers: Kafka consume loops that handle each message before the next `Consume`, as Confluent documents them; RabbitMQ consumers at any dispatch concurrency, with nack-and-requeue retries. Loops that hand messages to other tasks, and RabbitMQ retries through dead-letter exchanges, need the user's own `CatchingUpWith(...)`.
+  - What each plugin's catch-up covers: Kafka consume loops that handle each message before the next `Consume`, as Confluent documents them; RabbitMQ consumers at any dispatch concurrency, with nack-and-requeue retries. Loops that hand messages to other tasks, and RabbitMQ retries through dead-letter exchanges, need the user's own `CatchingUpWith(...)`.
   - That xUnit v3's analyzer xUnit1051 asks for a token on `Then(...)`, and the samples pass `TestContext.Current.CancellationToken` (answer 43).
   - That metrics without a trace id count other parallel tests: observable instruments, counters recorded outside any request's activity, and anything over OTLP. Users should filter by a tag unique to the test, or run those tests serially.
   - That over OTLP, a Given step's increment can arrive after the baseline. Users should tag such metrics with something only the When step touches, or opt in to `WaitForMetricsExport`.
@@ -682,7 +682,7 @@ The existing API, Kafka, RabbitMQ, Marten, Wolverine and Aspire samples use xUni
 | `Attempt`, `Action(ctx => ...)`, `Publish` with `Publishing(...)` | `attempt`, `TestAction` / `traced(traceparent -> ...)`, `publish`/`send` on the injected bus |
 | `Eventually(...)` | No counterpart |
 | `Recorded<T>` with `Recording(recorded, read, catchUp)` | `bus.use(recorded::add)` with `whenCaughtUp` |
-| `Use(plug)`; `KafkaPlug`, `RabbitMQPlug`, `MartenPlug`, `WolverinePlug` | The bus and event store given to the specification: `KafkaMessageBus`, `RabbitMQMessageBus` and their `whenCaughtUp`; `RecordingEventStore` |
+| `Use(plugin)`; `KafkaPlugin`, `RabbitMQPlugin`, `MartenPlugin`, `WolverinePlugin` | The bus and event store given to the specification: `KafkaMessageBus`, `RabbitMQMessageBus` and their `whenCaughtUp`; `RecordingEventStore` |
 | `Decorate`, `CallRecorder` | Spring test configuration that wraps a bean, as with `RecordingEventStore` |
 | `MessageHeaders` defaults | The bus headers `messageId`, `correlationId`, `causationId` and `traceparent` |
 | `Deadline(...)` | `catchUpTimeout` |
@@ -694,8 +694,8 @@ The existing API, Kafka, RabbitMQ, Marten, Wolverine and Aspire samples use xUni
 
 ## Testing Decisions
 
-- Documented public API (answer 55): every public and protected member of the `Ogooreck` library and of the four plug packages has an XML doc comment written for the caller: what it is for, when to reach for it, and a short example from a real test where useful. The build fails on a missing one: `GenerateDocumentationFile` and `TreatWarningsAsErrors` are on, with no `CS1591` suppression.
-- 100% line and branch coverage (answer 55): `./build.sh test` and CI fail when coverage of the `Ogooreck` library and of each plug package from all test projects is below 100% for lines or branches. Coverage comes from tests that drive the public API. A branch no test can reach is removed rather than covered artificially.
+- Documented public API (answer 55): every public and protected member of the `Ogooreck` library and of the four plugin packages has an XML doc comment written for the caller: what it is for, when to reach for it, and a short example from a real test where useful. The build fails on a missing one: `GenerateDocumentationFile` and `TreatWarningsAsErrors` are on, with no `CS1591` suppression.
+- 100% line and branch coverage (answer 55): `./build.sh test` and CI fail when coverage of the `Ogooreck` library and of each plugin package from all test projects is below 100% for lines or branches. Coverage comes from tests that drive the public API. A branch no test can reach is removed rather than covered artificially.
 
 - A good test drives Ogooreck the way a user does and checks only what a user observes: whether a Given/When/Then passes, and the failure message when it doesn't. Tests don't reach into internal types.
 - There is one seam: the public `ApiSpecification` API, called from the sample test projects against real sample apps. Each sample has passing scenarios, and scenarios that must fail and assert the thrown exception's message. Examples of failing scenarios: a wrong message, a missing `traceparent`, `ExpectNothingPublished` without catch-up, an exceeded deadline, a wrong span tree, an overshooting metric, and a configuration call after the first step.
@@ -708,12 +708,12 @@ The existing API, Kafka, RabbitMQ, Marten, Wolverine and Aspire samples use xUni
 
 - Changes to business logic specifications.
 - Catch-up from OpenTelemetry messaging spans. The spikes showed it misses retries and can't tell a message nobody consumes from one not picked up yet; telemetry stays for `ExpectTrace`, `ExpectCorrelatedTrace` and `ExpectMetric`, as in Java (answers 60–67).
-- Marten and Wolverine plugs for out-of-process apps.
-- Recording Kafka's synchronous `Produce`; the Kafka plug records `ProduceAsync`.
+- Marten and Wolverine plugins for out-of-process apps.
+- Recording Kafka's synchronous `Produce`; the Kafka plugin records `ProduceAsync`.
 - Declaring several consumers of one destination (answer 61, "as an option, maybe").
 - Java code. The Ogooreck JVM port is a follow-up that uses the mapping above.
-- A Node.js port, shaped after Emmett, is a later follow-up (answer 57). The plug concepts (`IPlug`, `Decorate`, `CallRecorder`, `MessageReader`, plug options) are named after what they do, not after .NET mechanisms, so the ports can keep the names.
-- RabbitMQ for out-of-process apps. The RabbitMQ plug decorates the in-process app's connection only; Java has no out-of-process RabbitMQ case either.
+- A Node.js port, shaped after Emmett, is a later follow-up (answer 57). The plugin concepts (`ISpecificationPlugin`, `Decorate`, `CallRecorder`, `MessageReader`, plugin options) are named after what they do, not after .NET mechanisms, so the ports can keep the names.
+- RabbitMQ for out-of-process apps. The RabbitMQ plugin decorates the in-process app's connection only; Java has no out-of-process RabbitMQ case either.
 
 ## Further Notes
 

@@ -1,7 +1,8 @@
 using Ogooreck.API;
+using Ogooreck.Aspire.Tests.Fixtures;
 using Xunit;
 using static Ogooreck.API.ApiSpecification;
-using static Ogooreck.Aspire.Tests.ShopRequests;
+using static Ogooreck.Aspire.Tests.Fixtures.ShopRequests;
 
 namespace Ogooreck.Aspire.Tests;
 

@@ -23,10 +23,13 @@ src/dotnet/
 ├── build.sh, build.cmd, build.ps1               run the build program below
 ├── Ogooreck.Build/                              build targets (Bullseye): compile, verify-format, test, pack, docs
 ├── Ogooreck/                                    the library, published to NuGet as Ogooreck
-├── Ogooreck.Wolverine/                          the Wolverine plug, published to NuGet as Ogooreck.Wolverine
-├── Ogooreck.Marten/                             the Marten plug, published to NuGet as Ogooreck.Marten
-├── Ogooreck.Kafka/                              the Kafka plug, published to NuGet as Ogooreck.Kafka
-├── Ogooreck.RabbitMQ/                           the RabbitMQ plug, published to NuGet as Ogooreck.RabbitMQ
+├── Ogooreck.Wolverine/                          the Wolverine plugin, published to NuGet as Ogooreck.Wolverine
+├── Ogooreck.Marten/                             the Marten plugin, published to NuGet as Ogooreck.Marten
+├── Ogooreck.Kafka/                              the Kafka plugin, published to NuGet as Ogooreck.Kafka
+├── Ogooreck.RabbitMQ/                           the RabbitMQ plugin, published to NuGet as Ogooreck.RabbitMQ
+├── Ogooreck.Mcp/                                MCP server that runs .NET tests and explains them with their spans, packed as the ogooreck-mcp dotnet tool
+├── Ogooreck.Mcp.Tests/                          MCP server tests, run against the fixture below over stdio
+├── Ogooreck.Mcp.Fixture/                        test project the MCP tests run: passing, failing and skipped scenarios
 ├── Ogooreck.Tests/                              library tests
 ├── Ogooreck.Sample.Api/                         sample API used by the API tests
 ├── Ogooreck.Api.Tests/                          API testing samples
@@ -95,6 +98,15 @@ The `.editorconfig` is the single source of truth for style. `dotnet format` app
 
 The build treats warnings as errors and enables nullable reference types for all projects (`src/dotnet/Directory.Build.props`), so annotate nullable references explicitly.
 
+### Code organization
+
+Group code by feature, not by technical role. A reader should find a feature, its tests and its helpers by following the same folder names.
+
+- **Libraries.** Each feature gets a folder: `Ogooreck/API/Plugins`, `API/Steps`, `API/Responses`, `API/Hosts`, `API/Messages` and `API/Telemetry`, with the engine that runs a scenario in `API/Running`. The plugin packages do the same, for example `Ogooreck.Kafka/Decorating` and `Ogooreck.Kafka/Consuming`. `Ogooreck.Mcp` has one folder per tool (`Running`, `SlowestSteps`, `FindingSpans`, `ScenarioDiagrams`, `ExportingSpans`), each holding the tool and the records it returns, and keeps what the tools share in `Spans`. A library keeps one namespace across its folders (`Ogooreck.API`, `Ogooreck.Kafka`, `Ogooreck.Mcp`), so moving a file never changes the public API.
+- **Samples.** A sample app is split into modules, then slices: `Carts/`, then `Carts/GettingCart/`. A module's `Configuration.cs` registers its services and maps its endpoints, and `Program.cs` only composes the modules. Code that knows nothing about the business, such as broker options or a publisher, lives in `Core/`. The messages an app puts on the bus live together in `Events/ShopEvents.cs`, grouped by module, never one file per event. Keep small types, such as a request, a command or a view, in the file of the slice that uses them. Namespaces follow the folders, and a class never shares its name with its module (the store of `Carts` is `CartStore`).
+- **Tests.** A test project mirrors the folders of the code it tests, and its namespaces follow its folders: the tests of `Ogooreck/API/Plugins` live in `Ogooreck.Tests/API/Plugins`, and the MCP tests of `Ogooreck.Mcp/SlowestSteps` in `Ogooreck.Mcp.Tests/SlowestSteps`. Tests of a package's root type sit at the test project's root and are named after it, for example `WolverinePluginTests`.
+- **Test helpers.** A helper used by one test class sits next to it, or inside it when it's small. A helper shared by several test classes goes to a `Fixtures/` folder in the closest folder that covers all its users, for example `API/Messages/Fixtures`. A helper shared across folders, such as the app under test or the requests of a sample, goes to the project's root `Fixtures/`. Name a helper file after what it holds: `ShopEvents.cs` for test events, `KafkaBroker.cs` for the broker fixture.
+
 ## Tests, coverage, and documentation
 
 Alongside formatting, `./build.sh test` checks two more things: full test coverage and a documented public API. Both run in CI, so a change that drops either won't go green. The existing tests and comments show what's expected.
@@ -107,9 +119,9 @@ Tests use xUnit v3, and the F# samples add FsCheck properties. Each test reads a
 
 ### 100% line and branch coverage
 
-`./build.sh test` requires 100% line and branch coverage of the `Ogooreck`, `Ogooreck.Wolverine`, `Ogooreck.Marten`, `Ogooreck.Kafka` and `Ogooreck.RabbitMQ` libraries, collected by [coverlet](https://github.com/coverlet-coverage/coverlet) from all test projects and merged, and the build program checks the result in [`Program.cs`](./src/dotnet/Ogooreck.Build/Program.cs). This does more than confirm the tests run the code they're meant to. It also surfaces code no test can reach. A branch you can't cover is often one that can't execute: a null check on a value that's never null, or a `default` case the type already rules out. When that's the case, the better fix is usually to remove the branch, not to write a test that only satisfies the check. So treat a coverage gap as a question about the code first, and the test second.
+`./build.sh test` requires 100% line and branch coverage of the `Ogooreck`, `Ogooreck.Wolverine`, `Ogooreck.Marten`, `Ogooreck.Kafka` and `Ogooreck.RabbitMQ` libraries and of the `Ogooreck.Mcp` server, collected by [coverlet](https://github.com/coverlet-coverage/coverlet) from all test projects and merged, and the build program checks the result in [`Program.cs`](./src/dotnet/Ogooreck.Build/Program.cs). This does more than confirm the tests run the code they're meant to. It also surfaces code no test can reach. A branch you can't cover is often one that can't execute: a null check on a value that's never null, or a `default` case the type already rules out. When that's the case, the better fix is usually to remove the branch, not to write a test that only satisfies the check. So treat a coverage gap as a question about the code first, and the test second.
 
-We reach the coverage from the outside in. Tests drive the public API the same way calling code does: `Spec.Given(...).When(...).Then(...)`. The internals are covered because real usage runs through them, not because a test reaches into an internal method. Tests written this way survive refactors and read as examples of the API. [`BankAccountTests`](./src/dotnet/Ogooreck.BusinessLogic.Tests/Deciders/BankAccountTests.cs) is a good place to start for business logic, and [`CausationTests`](./src/dotnet/Ogooreck.Api.Tests/Messages/CausationTests.cs) for API specifications.
+We reach the coverage from the outside in. Tests drive the public API the same way calling code does: `Spec.Given(...).When(...).Then(...)`. The internals are covered because real usage runs through them, not because a test reaches into an internal method. Tests written this way survive refactors and read as examples of the API. [`BankAccountTests`](./src/dotnet/Ogooreck.BusinessLogic.Tests/Deciders/BankAccountTests.cs) is a good place to start for business logic, and [`CausationTests`](./src/dotnet/Ogooreck.Api.Tests/API/Messages/CausationTests.cs) for API specifications.
 
 ### Documented public API
 

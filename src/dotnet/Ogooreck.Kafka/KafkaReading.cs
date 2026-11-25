@@ -32,6 +32,6 @@ internal sealed record KafkaReading<TKey, TValue>(
             string text => Encoding.UTF8.GetBytes(text),
             byte[] bytes => bytes,
             _ => throw new InvalidOperationException(
-                $"The Kafka plug reads message values of type string or byte[], but this one is {typeof(TValue).Name}. Give the plug a Read(...) function that turns it into an Observed.")
+                $"The Kafka plugin reads message values of type string or byte[], but this one is {typeof(TValue).Name}. Give the plugin a Read(...) function that turns it into an Observed.")
         };
 }

@@ -18,7 +18,7 @@
         <RepositoryUrl>https://github.com/oskardudycz/Ogooreck.git</RepositoryUrl>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <Product>Ogooreck</Product>
-        <Description>Ogooreck plug for Kafka: records the messages an app publishes and, for an in-process app, waits until its consumers have read them.</Description>
+        <Description>Ogooreck plugin for Kafka: records the messages an app publishes and, for an in-process app, waits until its consumers have read them.</Description>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <IncludeSymbols>true</IncludeSymbols>

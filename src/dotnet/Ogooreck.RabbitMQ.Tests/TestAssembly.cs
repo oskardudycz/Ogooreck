@@ -1,4 +1,4 @@
-using Ogooreck.RabbitMQ.Tests;
+using Ogooreck.RabbitMQ.Tests.Fixtures;
 using Xunit;
 
 [assembly: AssemblyFixture(typeof(RabbitMQBroker))]

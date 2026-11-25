@@ -4,7 +4,7 @@ namespace Ogooreck.RabbitMQ;
 
 /// <summary>
 /// A message the app published through its decorated channel: the exchange and routing key it was sent with, its properties and a copy of its body.
-/// <see cref="RabbitMQPlug.Published"/> holds these.
+/// <see cref="RabbitMQPlugin.Published"/> holds these.
 /// </summary>
 /// <example>
 /// <code>

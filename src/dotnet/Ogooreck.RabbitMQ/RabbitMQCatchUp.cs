@@ -4,7 +4,7 @@ using RabbitMQ.Client;
 
 namespace Ogooreck.RabbitMQ;
 
-internal sealed class RabbitMQCatchUp(HostState host, PlugRegistration registration)
+internal sealed class RabbitMQCatchUp(HostState host, SpecificationPluginRegistration registration)
 {
     private const double DiagnosisShareOfDeadline = 0.9;
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(10);
@@ -22,7 +22,7 @@ internal sealed class RabbitMQCatchUp(HostState host, PlugRegistration registrat
             var decorated = host.DecoratedConsumersOn(queue);
             if (consumers > decorated)
                 failures.Add(
-                    $"Queue {queue} has {consumers} consumers, but Ogooreck decorates {decorated}, so another consumer can take the probe. Resolve the consumer from the app's service provider, so that the plug wraps it, or configure the RabbitMQ plug with .CatchingUpWith(...) and your own wait.");
+                    $"Queue {queue} has {consumers} consumers, but Ogooreck decorates {decorated}, so another consumer can take the probe. Resolve the consumer from the app's service provider, so that the plugin wraps it, or configure the RabbitMQ plugin with .CatchingUpWith(...) and your own wait.");
         }
 
         if (failures.Count > 0)

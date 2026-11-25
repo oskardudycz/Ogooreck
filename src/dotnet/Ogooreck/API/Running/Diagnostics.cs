@@ -12,7 +12,7 @@ internal sealed class Diagnostics: IDisposable
         "How long a Given/When/Then run took, from Then until its last expectation.");
 
     public static readonly Histogram<double> Starts = Meter.CreateHistogram<double>("ogooreck.start.duration", "s",
-        "How long starting the app and its plugs took before the first step of a run that started them.");
+        "How long starting the app and its plugins took before the first step of a run that started them.");
 
     public static readonly Histogram<double> Steps = Meter.CreateHistogram<double>("ogooreck.step.duration", "s",
         "How long a step took, with a catch-up that wraps it.");

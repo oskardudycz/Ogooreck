@@ -7,7 +7,7 @@ open Ogooreck.Wolverine
 open Xunit
 open type ApiSpecification
 
-let wolverine = WolverinePlug()
+let wolverine = WolverinePlugin()
 
 type Shop() =
     inherit

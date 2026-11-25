@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using ModelContextProtocol.Client;
 using Xunit;
-using static Ogooreck.Mcp.Tests.Sources;
+using static Ogooreck.Mcp.Tests.Fixtures.Sources;
 
 namespace Ogooreck.Mcp.Tests;
 
