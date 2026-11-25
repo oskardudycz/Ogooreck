@@ -12,7 +12,7 @@ internal sealed class Diagnostics: IDisposable
         "How long a Given/When/Then run took, from Then until its last expectation.");
 
     public static readonly Histogram<double> Starts = Meter.CreateHistogram<double>("ogooreck.start.duration", "s",
-        "How long starting the app and its plugs took before a step.");
+        "How long starting the app and its plugs took before the first step of a run that started them.");
 
     public static readonly Histogram<double> Steps = Meter.CreateHistogram<double>("ogooreck.step.duration", "s",
         "How long a step took, with a catch-up that wraps it.");
@@ -40,7 +40,8 @@ internal sealed class Diagnostics: IDisposable
     {
         var previous = Activity.Current;
         Activity.Current = null;
-        var activity = Source.StartActivity(name, ActivityKind.Internal, parent?.activity?.Context ?? default);
+        var activity = Source.StartActivity(name, ActivityKind.Internal,
+            parent is null ? previous?.Context ?? default : parent.activity?.Context ?? default);
         Activity.Current = previous;
         var tags = new TagList();
         if (phase is not null)
@@ -48,7 +49,16 @@ internal sealed class Diagnostics: IDisposable
         return new Diagnostics(activity, duration, tags);
     }
 
+    public static Diagnostics Measure(Histogram<double> duration, string phase) =>
+        new(null, duration, new TagList { { "ogooreck.phase", phase } });
+
     public Diagnostics Tag(string key, string value)
+    {
+        activity?.SetTag(key, value);
+        return this;
+    }
+
+    public Diagnostics Tag(string key, int value)
     {
         activity?.SetTag(key, value);
         return this;
@@ -72,6 +82,7 @@ internal sealed class Diagnostics: IDisposable
     public void Fail(Exception exception)
     {
         activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+        activity?.AddException(exception);
         tags.Add("ogooreck.outcome", "failed");
     }
 

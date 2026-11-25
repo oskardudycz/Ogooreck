@@ -41,6 +41,7 @@ Target("test-mstest", dependsOn: ["compile"], () => RunTests("Ogooreck.MSTest.Te
 Target("test-tunit", dependsOn: ["compile"], () =>
     Run("dotnet", $"run --no-build --no-restore --configuration {configuration} --framework {framework} --project Ogooreck.TUnit.Tests/Ogooreck.TUnit.Tests.csproj"));
 Target("test-library", dependsOn: ["compile"], () => RunTests("Ogooreck.Tests"));
+Target("test-mcp", dependsOn: ["compile"], () => RunTests("Ogooreck.Mcp.Tests"));
 
 Target("verify-format", dependsOn: ["restore-tools"], () =>
 {
@@ -48,7 +49,7 @@ Target("verify-format", dependsOn: ["restore-tools"], () =>
     Run("dotnet", "fantomas --check .");
 });
 
-string[] testTargets = ["test-sample-api", "test-sample-wolverine", "test-sample-kafka", "test-sample-marten", "test-sample-rabbitmq", "test-sample-aspire", "test-business-logic", "test-fsharp", "test-wolverine-fsharp", "test-nunit", "test-mstest", "test-tunit", "test-library"];
+string[] testTargets = ["test-sample-api", "test-sample-wolverine", "test-sample-kafka", "test-sample-marten", "test-sample-rabbitmq", "test-sample-aspire", "test-business-logic", "test-fsharp", "test-wolverine-fsharp", "test-nunit", "test-mstest", "test-tunit", "test-library", "test-mcp"];
 
 Target("check-coverage", dependsOn: testTargets, CheckCoverage);
 
@@ -71,7 +72,7 @@ static void RunTests(string projectName, string extension = "csproj")
 
     Run("dotnet",
         $"test --no-build --no-restore --configuration {configuration} --framework {framework} {projectName}/{projectName}.{extension}" +
-        $" /p:CollectCoverage=true /p:Include=\"[Ogooreck]*%2c[Ogooreck.Wolverine]*%2c[Ogooreck.Marten]*%2c[Ogooreck.Kafka]*%2c[Ogooreck.RabbitMQ]*\" /p:ExcludeByFile=\"**/obj/**/*.cs\" /p:CoverletOutputFormat=\"json%2ccobertura\" /p:CoverletOutput=\"{directory}{Path.DirectorySeparatorChar}\"{mergeWith}");
+        $" /p:CollectCoverage=true /p:Include=\"[Ogooreck]*%2c[Ogooreck.Wolverine]*%2c[Ogooreck.Marten]*%2c[Ogooreck.Kafka]*%2c[Ogooreck.RabbitMQ]*%2c[Ogooreck.Mcp]*\" /p:ExcludeByFile=\"**/obj/**/*.cs\" /p:CoverletOutputFormat=\"json%2ccobertura\" /p:CoverletOutput=\"{directory}{Path.DirectorySeparatorChar}\"{mergeWith}");
 }
 
 static void CheckCoverage()
@@ -80,7 +81,7 @@ static void CheckCoverage()
     var lines = Counts(report, "lines");
     var branches = Counts(report, "branches");
 
-    Console.WriteLine($"Ogooreck, Ogooreck.Wolverine, Ogooreck.Marten, Ogooreck.Kafka and Ogooreck.RabbitMQ coverage: lines {lines.Covered}/{lines.Valid}, branches {branches.Covered}/{branches.Valid}");
+    Console.WriteLine($"Ogooreck, Ogooreck.Wolverine, Ogooreck.Marten, Ogooreck.Kafka, Ogooreck.RabbitMQ and Ogooreck.Mcp coverage: lines {lines.Covered}/{lines.Valid}, branches {branches.Covered}/{branches.Valid}");
 
     if (lines.Covered == lines.Valid && branches.Covered == branches.Valid)
         return;
@@ -93,7 +94,7 @@ static void CheckCoverage()
     foreach (var gap in gaps)
         Console.WriteLine($"  not fully covered: {gap}");
 
-    throw new InvalidOperationException("The Ogooreck libraries need 100% line and branch coverage from the test projects. Remove branches no public call can reach, and cover the rest through the public API.");
+    throw new InvalidOperationException("The Ogooreck libraries and Ogooreck.Mcp need 100% line and branch coverage from the test projects. Remove branches no public call can reach, and cover the rest through the public API.");
 }
 
 static (int Covered, int Valid) Counts(XElement report, string name) =>

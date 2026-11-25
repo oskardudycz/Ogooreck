@@ -62,16 +62,16 @@ public class OwnAppTests(KafkaBroker broker)
 
         await shop.Given().When(GetCart(cartId)).Then([ExpectResponse(OK)], ct);
 
-        var run = stopped.Single(span => span.DisplayName == $"Ogooreck When request GET /carts/{cartId}");
+        var run = stopped.Single(span => span.DisplayName == $"When request GET /carts/{cartId}");
         var names = stopped.Where(span => span.TraceId == run.TraceId).ToDictionary(span => span.SpanId, span => span.DisplayName);
         Assert.Equal(
         [
             "start plug KafkaPlug`2 < Kafka wait for the consumers' assignment and fetching",
             "start plug KafkaPlug`2 < Kafka read the end offsets",
             "start plug KafkaPlug`2 < Kafka check the consumer groups for other members",
-            $"catch-up after When request GET /carts/{cartId} < Kafka check the consumer groups for other members",
-            $"catch-up after When request GET /carts/{cartId} < Kafka read the end offsets",
-            $"catch-up after When request GET /carts/{cartId} < Kafka wait for the consumers to catch up"
+            "catch-up < Kafka check the consumer groups for other members",
+            "catch-up < Kafka read the end offsets",
+            "catch-up < Kafka wait for the consumers to catch up"
         ], stopped.Where(span => span.TraceId == run.TraceId && span.Source.Name == "Ogooreck.Kafka" && span.Parent?.Source.Name == "Ogooreck")
             .OrderBy(span => span.StartTimeUtc).Select(span => $"{names[span.ParentSpanId]} < {span.DisplayName}").Take(6));
         Assert.Contains("has no partitions assigned",
@@ -93,7 +93,7 @@ public class OwnAppTests(KafkaBroker broker)
 
         await shop.Given().When(GetCart(cartId)).Then([ExpectResponse(OK)], ct);
 
-        var run = stopped.Single(span => span.DisplayName == $"Ogooreck When request GET /carts/{cartId}");
+        var run = stopped.Single(span => span.DisplayName == $"When request GET /carts/{cartId}");
         var requests = stopped.Where(span => span.TraceId == run.TraceId && span.Parent?.Source.Name == "Ogooreck.Kafka")
             .Select(span => $"{span.Parent!.DisplayName} < {span.DisplayName}").ToHashSet();
         Assert.Superset(new HashSet<string>

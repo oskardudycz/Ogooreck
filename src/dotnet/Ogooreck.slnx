@@ -17,6 +17,8 @@
   </Folder>
   <Project Path="Ogooreck.Kafka/Ogooreck.Kafka.csproj" />
   <Project Path="Ogooreck.Marten/Ogooreck.Marten.csproj" />
+  <Project Path="Ogooreck.Mcp/Ogooreck.Mcp.csproj" />
+  <Project Path="Ogooreck.Mcp.Tests/Ogooreck.Mcp.Tests.csproj" />
   <Project Path="Ogooreck.RabbitMQ/Ogooreck.RabbitMQ.csproj" />
   <Project Path="Ogooreck.Api.Tests/Ogooreck.Api.Tests.csproj" />
   <Project Path="Ogooreck.Sample.Api/Ogooreck.Sample.Api.csproj" />
