@@ -17,7 +17,7 @@ public class ApiSpecification<TProgram>: IDisposable, IAsyncDisposable where TPr
     private readonly Lazy<StartedHost> host;
     private readonly SpecificationSettings settings;
     private readonly ApiSpecification<TProgram>? app;
-    private readonly List<IPlug> plugs = [];
+    private readonly List<ISpecificationPlugin> plugins = [];
     private Func<WebApplicationFactory<TProgram>, WebApplicationFactory<TProgram>> customise = factory => factory;
     private WebApplicationFactory<TProgram>? factory;
 
@@ -80,8 +80,8 @@ public class ApiSpecification<TProgram>: IDisposable, IAsyncDisposable where TPr
 
     /// <summary>
     /// Returns a specification that runs on this specification's app, with its test setup copied and then changed by <paramref name="configure"/>:
-    /// the deadline, recordings, catch-ups, publishing, telemetry, JSON options and plug options. It starts no app of its own, and disposing it leaves the app running.
-    /// The host can't be changed here. A plug that changes the app's services and isn't in the app's setup throws, saying to add it to the app's setup or to use <c>WithNewApp(...)</c>.
+    /// the deadline, recordings, catch-ups, publishing, telemetry, JSON options and plugin options. It starts no app of its own, and disposing it leaves the app running.
+    /// The host can't be changed here. A plugin that changes the app's services and isn't in the app's setup throws, saying to add it to the app's setup or to use <c>WithNewApp(...)</c>.
     /// </summary>
     /// <example>
     /// <code>
@@ -96,12 +96,12 @@ public class ApiSpecification<TProgram>: IDisposable, IAsyncDisposable where TPr
     {
         var variant = new ApiSpecification<TProgram>(app ?? this, settings.Variant());
         if (app is not null)
-            variant.plugs.AddRange(plugs);
+            variant.plugins.AddRange(plugins);
         return configure(variant);
     }
 
     /// <summary>
-    /// Starts a separate app: a specification with this one's host customization, plugs and test setup, then changed by <paramref name="configure"/>, which may add plugs that change the app's services.
+    /// Starts a separate app: a specification with this one's host customization, plugins and test setup, then changed by <paramref name="configure"/>, which may add plugins that change the app's services.
     /// Each one costs an app start, so use it only when the app itself must differ, and dispose it.
     /// </summary>
     /// <example>
@@ -130,8 +130,8 @@ public class ApiSpecification<TProgram>: IDisposable, IAsyncDisposable where TPr
         {
             customise = factory => host(root.customise(factory))
         };
-        foreach (var plug in root.plugs.Concat(app is null ? [] : plugs))
-            separate.Use(plug);
+        foreach (var plugin in root.plugins.Concat(app is null ? [] : plugins))
+            separate.Use(plugin);
         return configure(separate);
     }
 
@@ -142,18 +142,18 @@ public class ApiSpecification<TProgram>: IDisposable, IAsyncDisposable where TPr
     }
 
     /// <summary>
-    /// Adds a plug that wires one tool into the specification: its recorders, catch-ups, publish function and changes to the app's services.
-    /// Repeatable, and plugs mix freely with direct configuration calls. A plug made from another one through an option replaces it.
+    /// Adds a plugin that wires one tool into the specification: its recorders, catch-ups, publish function and changes to the app's services.
+    /// Repeatable, and plugins mix freely with direct configuration calls. A plugin made from another one through an option replaces it.
     /// </summary>
     /// <example>
     /// <code>
     /// For&lt;Program&gt;().Use(Messaging.Wolverine).Use(clock)
     /// </code>
     /// </example>
-    public ApiSpecification<TProgram> Use(IPlug plug)
+    public ApiSpecification<TProgram> Use(ISpecificationPlugin plugin)
     {
-        settings.Use(plug, inProcess: true, AppServices);
-        plugs.Add(plug);
+        settings.Use(plugin, inProcess: true, AppServices);
+        plugins.Add(plugin);
         return this;
     }
 
@@ -379,7 +379,7 @@ public class ApiSpecification<TProgram>: IDisposable, IAsyncDisposable where TPr
             : host.IsValueCreated
             ? factory!.Services
             : throw new InvalidOperationException(
-                "The host has not started yet: AppServices is available after the first step has started it. Read it inside a function the plug passes to the registration, such as a catch-up or a Starting function.");
+                "The host has not started yet: AppServices is available after the first step has started it. Read it inside a function the plugin passes to the registration, such as a catch-up or a Starting function.");
 
     private StartedHost Start()
     {

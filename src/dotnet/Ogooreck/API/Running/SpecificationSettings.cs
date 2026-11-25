@@ -12,7 +12,7 @@ internal sealed class SpecificationSettings
     private volatile bool startingDone;
     private Exception? startingFailure;
     private (object? Owner, string Name)? publishingSource;
-    private readonly HashSet<object> plugs = [];
+    private readonly HashSet<object> plugins = [];
     private SpecificationSettings? app;
     private SpecificationSettings? parent;
     private bool publishingInherited;
@@ -71,7 +71,7 @@ internal sealed class SpecificationSettings
     private bool IsOrDescendsFrom(SpecificationSettings other) =>
         ReferenceEquals(this, other) || (parent is not null && parent.IsOrDescendsFrom(other));
 
-    public bool IsPlugOfAParent(object owner) => parent is not null && (parent.plugs.Contains(owner) || parent.IsPlugOfAParent(owner));
+    public bool IsPluginOfAParent(object owner) => parent is not null && (parent.plugins.Contains(owner) || parent.IsPluginOfAParent(owner));
 
     public SpecificationSettings Variant()
     {
@@ -103,13 +103,13 @@ internal sealed class SpecificationSettings
         return copy;
     }
 
-    public void Use(IPlug plug, bool inProcess, Func<IServiceProvider> appServices)
+    public void Use(ISpecificationPlugin plugin, bool inProcess, Func<IServiceProvider> appServices)
     {
         EnsureConfigurable("Use(...)");
-        var owner = plug is IDerivedPlug derived ? derived.Origin : plug;
-        plugs.Add(owner);
-        var registration = new PlugRegistration(this, owner, plug.GetType().Name, inProcess, appServices);
-        plug.Plug(registration);
+        var owner = plugin is IDerivedPlugin derived ? derived.Origin : plugin;
+        plugins.Add(owner);
+        var registration = new SpecificationPluginRegistration(this, owner, plugin.GetType().Name, inProcess, appServices);
+        plugin.Register(registration);
     }
 
     public bool Started => startingDone && (parent?.Started ?? true);
@@ -130,13 +130,13 @@ internal sealed class SpecificationSettings
             {
                 try
                 {
-                    using (var plug = Diagnostics.Start($"start plug {name}", null, diagnostics))
-                        await plug.Within(() => start(ct));
+                    using (var plugin = Diagnostics.Start($"start plugin {name}", null, diagnostics))
+                        await plugin.Within(() => start(ct));
                 }
                 catch (Exception exception)
                 {
                     startingFailure = new AssertionException(
-                        $"{step}: plug {name} failed to start: {exception.Message}", exception);
+                        $"{step}: plugin {name} failed to start: {exception.Message}", exception);
                     throw startingFailure;
                 }
             }

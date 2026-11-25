@@ -1,12 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Ogooreck.Assertions;
-using Ogooreck.Sample.RabbitMQ;
+using Ogooreck.RabbitMQ.Tests.Fixtures;
 using Ogooreck.Sample.RabbitMQ.Events;
+using Ogooreck.Sample.RabbitMQ.Orders;
 using Ogooreck.Testing;
 using Xunit;
 using static System.Net.HttpStatusCode;
 using static Ogooreck.API.ApiSpecification;
-using static Ogooreck.RabbitMQ.Tests.ShopRequests;
+using static Ogooreck.RabbitMQ.Tests.Fixtures.ShopRequests;
 
 namespace Ogooreck.RabbitMQ.Tests;
 
@@ -33,7 +34,7 @@ public class OwnAppTests(RabbitMQBroker broker)
             .When(PlaceOrders(orderIds))
             .Then([ExpectResponse(Accepted)], ct);
 
-        Assert.Equal(20, app.Services.Provider.GetRequiredService<Orders>().ShippedCount);
+        Assert.Equal(20, app.Services.Provider.GetRequiredService<OrderStatuses>().ShippedCount);
     }
 
     [Fact]
@@ -46,7 +47,7 @@ public class OwnAppTests(RabbitMQBroker broker)
             .When(PlaceOrders(orderIds))
             .Then([ExpectResponse(Accepted)], ct);
 
-        Assert.Equal(3, shop.Services.Provider.GetRequiredService<Orders>().Handled);
+        Assert.Equal(3, shop.Services.Provider.GetRequiredService<OrderStatuses>().Handled);
     }
 
     [Fact]

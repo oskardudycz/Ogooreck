@@ -1,7 +1,8 @@
+using Ogooreck.RabbitMQ.Tests.Fixtures;
 using Xunit;
 using static System.Net.HttpStatusCode;
 using static Ogooreck.API.ApiSpecification;
-using static Ogooreck.RabbitMQ.Tests.ShopRequests;
+using static Ogooreck.RabbitMQ.Tests.Fixtures.ShopRequests;
 
 namespace Ogooreck.RabbitMQ.Tests;
 

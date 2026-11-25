@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Ogooreck.API;
 
-/// <summary>Decorates the app's own services from a plug, so recording needs no change to production code.</summary>
+/// <summary>Decorates the app's own services from a plugin, so recording needs no change to production code.</summary>
 /// <example>
 /// <code>
 /// registration.Services(services =&gt; services.Decorate&lt;IClock&gt;(inner =&gt; new RecordingClock(inner)))
@@ -37,7 +37,7 @@ public static class ServiceCollectionDecoration
             descriptor.ServiceType == typeof(TService) && !descriptor.IsKeyedService);
         if (index < 0)
             throw new InvalidOperationException(
-                $"Decorate<{typeof(TService).Name}> found no registration of {typeof(TService).FullName}: the app must register it for a plug to decorate it.");
+                $"Decorate<{typeof(TService).Name}> found no registration of {typeof(TService).FullName}: the app must register it for a plugin to decorate it.");
 
         var original = services[index];
         services[index] = new ServiceDescriptor(typeof(TService),

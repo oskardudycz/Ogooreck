@@ -18,7 +18,7 @@
         <RepositoryUrl>https://github.com/oskardudycz/Ogooreck.git</RepositoryUrl>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <Product>Ogooreck</Product>
-        <Description>Ogooreck plug for Marten: records the events an in-process app appends and waits for its async projections.</Description>
+        <Description>Ogooreck plugin for Marten: records the events an in-process app appends and waits for its async projections.</Description>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <IncludeSymbols>true</IncludeSymbols>

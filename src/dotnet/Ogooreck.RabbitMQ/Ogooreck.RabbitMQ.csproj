@@ -18,7 +18,7 @@
         <RepositoryUrl>https://github.com/oskardudycz/Ogooreck.git</RepositoryUrl>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <Product>Ogooreck</Product>
-        <Description>Ogooreck plug for RabbitMQ: records the messages an in-process app publishes and waits until its consumers are done with them.</Description>
+        <Description>Ogooreck plugin for RabbitMQ: records the messages an in-process app publishes and waits until its consumers are done with them.</Description>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <IncludeSymbols>true</IncludeSymbols>
