@@ -5,7 +5,7 @@ version="$(dotnet --version)"
 if [[ $version = 10.* ]]; then
   target_framework="net10.0"
 else
-  echo "BUILD FAILURE: .NET 10 SDK required to run build"
+  echo "BUILD FAILURE: .NET 10 SDK required to run build, found $version"
   exit 1
 fi
 

@@ -1,0 +1,168 @@
+using System.Globalization;
+using System.Text;
+using Google.Protobuf;
+
+namespace Ogooreck.Mcp;
+
+internal static class OtlpSpans
+{
+    private const int ErrorStatus = 2;
+    private static readonly string[] Kinds = ["unspecified", "internal", "server", "client", "producer", "consumer"];
+
+    public static List<CollectedSpan> Decode(byte[] request)
+    {
+        var spans = new List<CollectedSpan>();
+        foreach (var resourceSpans in FieldsOf(request, 1))
+        {
+            var service = FieldsOf(resourceSpans, 1).Select(AttributesOf).FirstOrDefault([])
+                .GetValueOrDefault("service.name", "");
+            foreach (var scopeSpans in FieldsOf(resourceSpans, 2))
+            {
+                var scope = FieldsOf(scopeSpans, 1).Select(scope => FieldsOf(scope, 1).Select(Encoding.UTF8.GetString).FirstOrDefault(""))
+                    .FirstOrDefault("");
+                spans.AddRange(FieldsOf(scopeSpans, 2).Select(span => Span(span, service, scope)));
+            }
+        }
+
+        return spans;
+    }
+
+    private static IEnumerable<byte[]> FieldsOf(byte[] message, int wanted)
+    {
+        var input = new CodedInputStream(message);
+        uint tag;
+        while ((tag = input.ReadTag()) != 0)
+        {
+            if (WireFormat.GetTagFieldNumber(tag) == wanted)
+                yield return input.ReadBytes().ToByteArray();
+            else
+                input.SkipLastField();
+        }
+    }
+
+    private static Dictionary<string, string> AttributesOf(byte[] resource)
+    {
+        var attributes = new Dictionary<string, string>();
+        foreach (var keyValue in FieldsOf(resource, 1))
+            AddAttribute(keyValue, attributes);
+        return attributes;
+    }
+
+    private static CollectedSpan Span(byte[] message, string service, string scope)
+    {
+        string traceId = "", spanId = "", name = "";
+        string? parentSpanId = null, error = null;
+        ulong start = 0, end = 0;
+        var kind = 0;
+        var attributes = new Dictionary<string, string>();
+        var input = new CodedInputStream(message);
+        uint tag;
+        while ((tag = input.ReadTag()) != 0)
+        {
+            switch (tag)
+            {
+                case 10:
+                    traceId = Convert.ToHexStringLower(input.ReadBytes().Span);
+                    break;
+                case 18:
+                    spanId = Convert.ToHexStringLower(input.ReadBytes().Span);
+                    break;
+                case 34:
+                    parentSpanId = Convert.ToHexStringLower(input.ReadBytes().Span);
+                    break;
+                case 48:
+                    kind = input.ReadEnum();
+                    break;
+                case 42:
+                    name = input.ReadString();
+                    break;
+                case 57:
+                    start = input.ReadFixed64();
+                    break;
+                case 65:
+                    end = input.ReadFixed64();
+                    break;
+                case 74:
+                    AddAttribute(input.ReadBytes().ToByteArray(), attributes);
+                    break;
+                case 122:
+                    error = ErrorOf(input.ReadBytes().ToByteArray());
+                    break;
+                default:
+                    input.SkipLastField();
+                    break;
+            }
+        }
+
+        return new CollectedSpan(service, scope, traceId, spanId, parentSpanId, name, Kinds[kind], FromUnixNanoseconds(start),
+            FromUnixNanoseconds(end), error, attributes);
+    }
+
+    private static DateTimeOffset FromUnixNanoseconds(ulong nanoseconds) =>
+        DateTimeOffset.UnixEpoch.AddTicks((long)(nanoseconds / 100));
+
+    private static string? ErrorOf(byte[] status)
+    {
+        var message = "";
+        var code = 0;
+        var input = new CodedInputStream(status);
+        uint tag;
+        while ((tag = input.ReadTag()) != 0)
+        {
+            if (tag == 18)
+                message = input.ReadString();
+            else
+                code = input.ReadEnum();
+        }
+
+        return code == ErrorStatus ? message : null;
+    }
+
+    private static void AddAttribute(byte[] keyValue, Dictionary<string, string> attributes)
+    {
+        var key = "";
+        string? value = null;
+        var input = new CodedInputStream(keyValue);
+        uint tag;
+        while ((tag = input.ReadTag()) != 0)
+        {
+            if (tag == 10)
+                key = input.ReadString();
+            else
+                value = ValueOf(input.ReadBytes().ToByteArray());
+        }
+
+        if (value is not null)
+            attributes[key] = value;
+    }
+
+    private static string? ValueOf(byte[] anyValue)
+    {
+        string? value = null;
+        var input = new CodedInputStream(anyValue);
+        uint tag;
+        while ((tag = input.ReadTag()) != 0)
+        {
+            switch (tag)
+            {
+                case 10:
+                    value = input.ReadString();
+                    break;
+                case 16:
+                    value = input.ReadBool().ToString().ToLowerInvariant();
+                    break;
+                case 24:
+                    value = input.ReadInt64().ToString(CultureInfo.InvariantCulture);
+                    break;
+                case 33:
+                    value = input.ReadDouble().ToString(CultureInfo.InvariantCulture);
+                    break;
+                default:
+                    input.SkipLastField();
+                    break;
+            }
+        }
+
+        return value;
+    }
+}

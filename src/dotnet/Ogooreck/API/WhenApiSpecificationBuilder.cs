@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Ogooreck.Assertions;
 
 namespace Ogooreck.API;
@@ -12,14 +13,16 @@ public sealed class WhenApiSpecificationBuilder
     private readonly SpecificationSettings settings;
     private readonly TestStep[] given;
     private readonly TestStep when;
+    private readonly TestCaller caller;
 
     internal WhenApiSpecificationBuilder(Lazy<StartedHost> host, SpecificationSettings settings, TestStep[] given,
-        TestStep when)
+        TestStep when, TestCaller caller)
     {
         this.host = host;
         this.settings = settings;
         this.given = given;
         this.when = when;
+        this.caller = caller;
     }
 
     /// <summary>Runs the steps, then the expectations in order. The first failing expectation fails the test.</summary>
@@ -38,7 +41,10 @@ public sealed class WhenApiSpecificationBuilder
     /// </example>
     public async Task Then(Expectation[] expectations, CancellationToken ct)
     {
-        using var run = Diagnostics.Start("Ogooreck Then", Diagnostics.Runs);
+        using var run = Diagnostics.Start("Ogooreck Given/When/Then", Diagnostics.Runs)
+            .Tag("code.function.name", caller.Test)
+            .Tag("code.file.path", caller.File)
+            .Tag("code.line.number", caller.Line);
         SpecificationSettings.Running = settings;
         try
         {
@@ -61,28 +67,33 @@ public sealed class WhenApiSpecificationBuilder
 
         var responses = new List<HttpResponseMessage>();
         var telemetry = new TestTelemetry(settings);
+        var (firstPhase, firstStep) = given.Length > 0 ? ("Given step 1", given[0]) : (WhenPhase, when);
+        ThrowIfCancelledBefore(firstPhase, ct);
+        var started = await Before(run, $"{firstPhase} {firstStep.Kind}", ct);
 
-        for (var index = 0; index < given.Length; index++)
+        if (given.Length > 0)
         {
-            var step = given[index];
-            var (response, where, _) = await Run(step, $"Given step {index + 1}", responses, telemetry, [], run, ct);
+            using var givenSpan = Diagnostics.Start("Given", null, run);
+            for (var index = 0; index < given.Length; index++)
+            {
+                var step = given[index];
+                var (response, where, _) = await Run(step, $"Given step {index + 1}", started, responses, telemetry, [], givenSpan, ct);
 
-            if (response is not null && !step.MayFail && (int)response.StatusCode >= 400)
-                throw new AssertionException(
-                    $"{where} failed with {ApiSpecification.Describe(response.StatusCode)}, but a Given request must succeed; wrap it in Attempt(...) if it may fail. Body: {await response.Content.ReadAsStringAsync(ct)}");
+                if (response is not null && !step.MayFail && (int)response.StatusCode >= 400)
+                    throw new AssertionException(
+                        $"{where} failed with {ApiSpecification.Describe(response.StatusCode)}, but a Given request must succeed; wrap it in Attempt(...) if it may fail. Body: {await response.Content.ReadAsStringAsync(ct)}");
+            }
         }
 
-        StartedHost started;
-        using (Diagnostics.Start("start before the baseline", Diagnostics.Starts, run))
-            started = host.Value;
         await telemetry.TakeBaseline(ct);
 
         var eventually = when is EventuallyStep;
         var responseExpectations = eventually ? expectations.Where(expectation => expectation.ChecksResponse).ToArray() : [];
-        var (whenResponse, whenWhere, whenTraceId) = await Run(when, WhenPhase, responses, telemetry, responseExpectations, run, ct);
+        var (whenResponse, whenWhere, whenTraceId) = await Run(when, WhenPhase, started, responses, telemetry, responseExpectations, run, ct);
         var outcome = new Outcome(whenResponse, whenWhere, when.Kind, settings.Json ?? started.Json, whenTraceId,
             settings.Recordings.Items, telemetry, settings.Deadline, settings.Clock, ct);
 
+        using var then = Diagnostics.Start("Then", null, run);
         for (var index = 0; index < expectations.Length; index++)
         {
             if (ct.IsCancellationRequested)
@@ -90,26 +101,41 @@ public sealed class WhenApiSpecificationBuilder
                     $"Then was cancelled before expectation {index + 1} of {expectations.Length} ran.", ct);
             if (eventually && expectations[index].ChecksResponse)
                 continue;
-            using (Diagnostics.Start($"expectation {index + 1}", Diagnostics.Expectations, run))
+            using (Diagnostics.Start($"expectation {index + 1}", Diagnostics.Expectations, then))
                 await expectations[index].Verify(outcome);
         }
     }
 
-    private async Task<(HttpResponseMessage? Response, string Where, ActivityTraceId TraceId)> Run(TestStep step,
-        string phase, List<HttpResponseMessage> responses, TestTelemetry telemetry, Expectation[] responseExpectations,
-        Diagnostics run, CancellationToken ct)
+    private async Task<StartedHost> Before(Diagnostics run, string firstStep, CancellationToken ct)
+    {
+        if (host.IsValueCreated && settings.Started)
+            return host.Value;
+
+        using var before = Diagnostics.Start("Before", Diagnostics.Starts, run);
+        StartedHost started;
+        if (host.IsValueCreated)
+            started = host.Value;
+        else
+            using (Diagnostics.Start("start app", null, before))
+                started = host.Value;
+        await settings.EnsureStarted(firstStep, before, ct);
+        return started;
+    }
+
+    private static void ThrowIfCancelledBefore(string phase, CancellationToken ct)
     {
         if (ct.IsCancellationRequested)
             throw new OperationCanceledException(
                 $"Then was cancelled before {(phase == WhenPhase ? "the When step" : phase)} started.", ct);
+    }
+
+    private async Task<(HttpResponseMessage? Response, string Where, ActivityTraceId TraceId)> Run(TestStep step,
+        string phase, StartedHost started, List<HttpResponseMessage> responses, TestTelemetry telemetry,
+        Expectation[] responseExpectations, Diagnostics parent, CancellationToken ct)
+    {
+        ThrowIfCancelledBefore(phase, ct);
 
         var phaseTag = phase == WhenPhase ? "when" : "given";
-        StartedHost started;
-        using (var starting = Diagnostics.Start($"start before {phase}", Diagnostics.Starts, run))
-        {
-            started = host.Value;
-            await settings.EnsureStarted($"{phase} {step.Kind}", starting, ct);
-        }
 
         var traceId = default(ActivityTraceId);
         HttpRequestMessage? lastRequest = null;
@@ -161,7 +187,8 @@ public sealed class WhenApiSpecificationBuilder
 
         try
         {
-            using (var span = Diagnostics.Start(phase, Diagnostics.Steps, run, phaseTag))
+            using var span = Diagnostics.Start(phase, null, parent, phaseTag);
+            using (Diagnostics.Measure(Diagnostics.Steps, phaseTag))
                 try
                 {
                     await catchUp.RunStep(async token =>
@@ -170,14 +197,12 @@ public sealed class WhenApiSpecificationBuilder
                 finally
                 {
                     span.Rename(Where()).Tag("ogooreck.step.trace_id", traceId.ToString());
-                    if (phase == WhenPhase)
-                        run.Rename($"Ogooreck {Where()}");
                 }
 
             if (response is not null)
                 responses.Add(response);
 
-            using (var catchingUp = Diagnostics.Start($"catch-up after {Where()}", Diagnostics.CatchUps, run, phaseTag))
+            using (var catchingUp = Diagnostics.Start("catch-up", Diagnostics.CatchUps, span, phaseTag))
                 await catchingUp.Within(() => catchUp.AfterStep(Where()));
             return (response, Where(), traceId);
         }
@@ -211,4 +236,15 @@ public sealed class WhenApiSpecificationBuilder
 
     private static string WhereOf(string phase, TestStep step, HttpRequestMessage? request) =>
         request is null ? $"{phase} {step.Kind}" : $"{phase} {step.Kind} {ApiSpecification.Describe(request)}";
+}
+
+internal readonly record struct TestCaller(string Test, string File, int Line)
+{
+    public static TestCaller Of(StackFrame caller, string method, string file, int line)
+    {
+        var type = caller.GetMethod()?.DeclaringType;
+        while (type is { DeclaringType: not null } && type.IsDefined(typeof(CompilerGeneratedAttribute), false))
+            type = type.DeclaringType;
+        return new(type is null ? method : $"{type.FullName}.{method}", file, line);
+    }
 }

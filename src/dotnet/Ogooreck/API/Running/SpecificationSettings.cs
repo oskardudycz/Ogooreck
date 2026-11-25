@@ -9,7 +9,7 @@ internal sealed class SpecificationSettings
     private static readonly AsyncLocal<SpecificationSettings?> RunningOne = new();
     private readonly SemaphoreSlim startingGate = new(1, 1);
     private bool started;
-    private bool startingDone;
+    private volatile bool startingDone;
     private Exception? startingFailure;
     private (object? Owner, string Name)? publishingSource;
     private readonly HashSet<object> plugs = [];
@@ -111,6 +111,8 @@ internal sealed class SpecificationSettings
         var registration = new PlugRegistration(this, owner, plug.GetType().Name, inProcess, appServices);
         plug.Plug(registration);
     }
+
+    public bool Started => startingDone && (parent?.Started ?? true);
 
     public async Task EnsureStarted(string step, Diagnostics diagnostics, CancellationToken ct)
     {
