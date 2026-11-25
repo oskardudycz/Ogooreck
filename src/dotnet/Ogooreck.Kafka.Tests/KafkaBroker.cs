@@ -1,7 +1,9 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
+using Ogooreck.API;
 using Ogooreck.Kafka;
 using Ogooreck.Sample.Kafka;
 using Ogooreck.Sample.Kafka.Events;
@@ -40,7 +42,20 @@ public sealed class KafkaBroker: IAsyncLifetime
         await NewTopic(AppSettings.SharedTopic);
         App = new KafkaApi(this, AppSettings.Shared, Messaging.Kafka, new SharedFaultsPlug(Faults));
         PublishOnly = new KafkaApi(this, AppSettings.WithoutShipping(), Messaging.Kafka, Consuming, PublishOnlyServices);
+        await StartUntracedConsumersBeforeAnythingTraces();
+        await StartConsumersOf(PublishOnly);
     }
+
+    private async Task StartUntracedConsumersBeforeAnythingTraces()
+    {
+        await using var untraced = new KafkaApi(this, AppSettings.Own(KafkaOptions.DefaultTopic), Messaging.Kafka);
+        await StartConsumersOf(untraced.Telemetry(TelemetrySources.Off));
+    }
+
+    private static Task StartConsumersOf(ApiSpecification<Program> app) =>
+        app.Given()
+            .When(ShopRequests.GetCart(Guid.NewGuid()))
+            .Then([ApiSpecification.ExpectResponse(HttpStatusCode.OK)], TestContext.Current.CancellationToken);
 
     public async ValueTask DisposeAsync()
     {
@@ -49,6 +64,10 @@ public sealed class KafkaBroker: IAsyncLifetime
         await Consuming.DisposeAsync();
         await container.DisposeAsync();
     }
+
+    public Task StopAnswering() => container.PauseAsync();
+
+    public Task AnswerAgain() => container.UnpauseAsync();
 
     public async Task ProduceOlderOrders(string topic)
     {

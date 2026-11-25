@@ -21,7 +21,8 @@ internal static class Waiting
                 var remaining = outcome.Deadline - outcome.Clock.GetElapsedTime(started);
                 if (remaining <= TimeSpan.Zero)
                     throw new AssertionException(atDeadline(found));
-                await Task.Delay(remaining < PollInterval ? remaining : PollInterval, outcome.Clock, outcome.CancellationToken);
+                await Task.Delay(TimeSpan.FromTicks(Math.Min(remaining.Ticks, PollInterval.Ticks)), outcome.Clock,
+                    outcome.CancellationToken);
             }
         }
         catch (OperationCanceledException exception) when (outcome.CancellationToken.IsCancellationRequested)

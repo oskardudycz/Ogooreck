@@ -85,6 +85,29 @@ public class AppendedEventsTests(PostgresDatabase database, MartenApi shop): ICl
     }
 
     [Fact]
+    public async Task ExpectNothingAppended_OnAnEmptyEventStore_Passes()
+    {
+        await using var empty = new MartenApi(database);
+
+        await empty.Given().When(GetCart(cartId)).Then([ExpectNothingAppended()], ct);
+    }
+
+    [Fact]
+    public async Task ProjectionsStaleUntilTheDeadline_FailTheCatchUpWithMartensTimeout()
+    {
+        await using var app = MartenApi.WithStalledProjections(database);
+        await using var shop = app.With(spec => spec.Deadline(TimeSpan.FromMilliseconds(500)));
+
+        var error = await Assert.ThrowsAsync<AssertionException>(() =>
+            shop.Given().When(AddProduct(cartId, "socks")).Then([], ct));
+
+        Assert.StartsWith(
+            $"The application kept producing messages for longer than 00:00:00.5000000 after the When request POST /carts/{cartId}/products.",
+            error.Message);
+        Assert.IsType<TimeoutException>(error.InnerException);
+    }
+
+    [Fact]
     public async Task PlugDeadline_BoundsTheProjectionWait_WithOgoorecksCatchUpMessage()
     {
         await using var app = MartenApi.WithStalledProjections(database);
