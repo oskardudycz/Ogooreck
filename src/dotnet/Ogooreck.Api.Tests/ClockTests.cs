@@ -98,6 +98,39 @@ public class ClockTests(ApiSpecification<Program> api): IClassFixture<ApiSpecifi
         Assert.Equal(TimeSpan.FromSeconds(5), plug.Deadline);
     }
 
+    [Fact]
+    public async Task Plug_ReadWhileAnotherSpecificationRuns_KeepsTheDeadlineOfItsOwnSpecification()
+    {
+        var plug = new RegistrationKeepingPlug();
+        await using var own = api.With(setup => setup.Deadline(TimeSpan.FromSeconds(5)).Use(plug));
+        await using var other = api.With(setup => setup.Deadline(TimeSpan.FromSeconds(7)));
+        var seen = TimeSpan.Zero;
+
+        await other.Given().When(Action(_ =>
+        {
+            seen = plug.Registration!.Deadline;
+            return Task.CompletedTask;
+        })).Then([], ct);
+
+        Assert.Equal(TimeSpan.FromSeconds(5), seen);
+    }
+
+    [Fact]
+    public async Task Plug_ReadOutsideOfARun_HasTheDeadlineOfItsSpecification()
+    {
+        var plug = new RegistrationKeepingPlug();
+        await using var spec = api.With(setup => setup.Deadline(TimeSpan.FromSeconds(5)).Use(plug));
+
+        Assert.Equal(TimeSpan.FromSeconds(5), plug.Registration!.Deadline);
+    }
+
+    private sealed class RegistrationKeepingPlug: IPlug
+    {
+        public PlugRegistration? Registration;
+
+        public void Plug(PlugRegistration registration) => Registration = registration;
+    }
+
     private sealed class CatchUpReadingPlug: IPlug
     {
         public TimeProvider? Clock;

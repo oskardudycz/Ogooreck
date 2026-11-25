@@ -119,6 +119,22 @@ public class RecorderByRoleTests(ApiSpecification<Program> api): IClassFixture<A
     }
 
     [Fact]
+    public async Task ExpectCausation_WithoutRecorders_AndTwoRecordersOfAppendedEvents_FailsSayingToNameOneInTheTree()
+    {
+        var other = new Recorded<Observed>();
+        await using var spec = api.With(setup => setup
+            .Appending(appended, observed => observed, NoWait)
+            .Appending(other, observed => observed, NoWait));
+
+        var error = await Assert.ThrowsAsync<AssertionException>(() =>
+            spec.Given().When(Adding(appended)).Then([ExpectCausation(Appended(new OrderPlaced(cartId)))], ct));
+
+        Assert.EndsWith(
+            "ExpectCausation(...) found 2 recorders of the events the app appended, so it can't tell which one to check. Name it with AppendedIn(...), for example AppendedIn(Events.Marten.Appended, ...).",
+            error.Message);
+    }
+
+    [Fact]
     public async Task ExpectPublishedIn_OnARecorderOfAppendedEvents_FailsSayingToUseExpectAppendedIn()
     {
         await using var spec = api.With(setup => setup.Appending(appended, observed => observed, NoWait));

@@ -242,9 +242,9 @@ internal readonly record struct TestCaller(string Test, string File, int Line)
 {
     public static TestCaller Of(StackFrame caller, string method, string file, int line)
     {
-        var type = caller.GetMethod()?.DeclaringType;
-        while (type is { DeclaringType: not null } && type.IsDefined(typeof(CompilerGeneratedAttribute), false))
+        var type = caller.GetMethod()!.DeclaringType!;
+        while (type.DeclaringType is not null && type.IsDefined(typeof(CompilerGeneratedAttribute), false))
             type = type.DeclaringType;
-        return new(type is null ? method : $"{type.FullName}.{method}", file, line);
+        return new($"{type.FullName}.{method}", file, line);
     }
 }

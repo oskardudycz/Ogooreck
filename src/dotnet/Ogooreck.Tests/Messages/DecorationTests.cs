@@ -147,7 +147,7 @@ public class DecorationTests
             new ServiceCollection().Decorate<IGreeter>(inner => inner));
 
         Assert.Equal(
-            "Decorate<IGreeter> found no registration of Ogooreck.Tests.DecorationTests+IGreeter: the app must register it for a plug to decorate it.",
+            "Decorate<IGreeter> found no registration of Ogooreck.Tests.Messages.DecorationTests+IGreeter: the app must register it for a plug to decorate it.",
             error.Message);
     }
 
