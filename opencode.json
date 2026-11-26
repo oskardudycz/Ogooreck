@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "ogooreck": {
+      "type": "local",
+      "command": ["dotnet", "run", "--project", "src/dotnet/Ogooreck.Mcp", "--framework", "net10.0"],
+      "enabled": true
+    }
+  }
+}

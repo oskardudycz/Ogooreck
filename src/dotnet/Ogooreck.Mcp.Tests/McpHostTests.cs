@@ -22,6 +22,7 @@ public class McpHostTests(McpServer server): IClassFixture<McpServer>
         Assert.Contains("ogooreck_slowest_steps", instructions);
         Assert.Contains("ogooreck_test_spans", instructions);
         Assert.Contains("ogooreck_concurrent_spans", instructions);
+        Assert.Contains("ogooreck_import_spans", instructions);
     }
 
     [Fact]
@@ -30,7 +31,7 @@ public class McpHostTests(McpServer server): IClassFixture<McpServer>
         var tools = (await server.Client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken))
             .ToDictionary(tool => tool.Name, tool => tool.ProtocolTool.Annotations);
 
-        Assert.Equal(["ogooreck_concurrent_spans", "ogooreck_export_spans", "ogooreck_find_spans", "ogooreck_scenario_diagram",
+        Assert.Equal(["ogooreck_concurrent_spans", "ogooreck_export_spans", "ogooreck_find_spans", "ogooreck_import_spans", "ogooreck_scenario_diagram",
                 "ogooreck_slowest_steps", "ogooreck_test_run", "ogooreck_test_spans"],
             tools.Keys.Order());
         Assert.All(tools.Values, annotations => Assert.False(string.IsNullOrEmpty(annotations?.Title)));
