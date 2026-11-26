@@ -7,10 +7,12 @@ on:
     paths:
       - 'src/dotnet/**'
       - '.github/workflows/dotnet-ci.yml'
+      - '.github/otel-collector.yaml'
   pull_request:
     paths:
       - 'src/dotnet/**'
       - '.github/workflows/dotnet-ci.yml'
+      - '.github/otel-collector.yaml'
 
 permissions:
   contents: read
@@ -18,6 +20,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v7.0.1
@@ -26,6 +29,29 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Start the OpenTelemetry Collector that writes the spans of the tests
+        run: |
+          mkdir -m 777 "$RUNNER_TEMP/spans"
+          docker run --detach --name otel-collector --publish 4318:4318 \
+            --volume "$PWD/.github/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro" \
+            --volume "$RUNNER_TEMP/spans:/spans" \
+            otel/opentelemetry-collector-contrib:0.164.0
+
       - name: Build and test
         working-directory: src/dotnet
+        env:
+          OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
+          OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
         run: ./build.sh test
+
+      - name: Stop the OpenTelemetry Collector
+        if: always()
+        run: docker stop otel-collector
+
+      - name: Upload the spans of the tests
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: spans
+          path: ${{ runner.temp }}/spans/spans.pb
+          if-no-files-found: ignore

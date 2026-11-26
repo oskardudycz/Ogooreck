@@ -72,6 +72,7 @@ static void RunTests(string projectName, string extension = "csproj")
 
     Run("dotnet",
         $"test --no-build --no-restore --configuration {configuration} --framework {framework} {projectName}/{projectName}.{extension}" +
+        " --blame-hang-timeout 5m --blame-hang-dump-type none" +
         $" /p:CollectCoverage=true /p:Include=\"[Ogooreck]*%2c[Ogooreck.Wolverine]*%2c[Ogooreck.Marten]*%2c[Ogooreck.Kafka]*%2c[Ogooreck.RabbitMQ]*%2c[Ogooreck.Mcp]*\" /p:ExcludeByFile=\"**/obj/**/*.cs\" /p:CoverletOutputFormat=\"json%2ccobertura\" /p:CoverletOutput=\"{directory}{Path.DirectorySeparatorChar}\"{mergeWith}");
 }
 
