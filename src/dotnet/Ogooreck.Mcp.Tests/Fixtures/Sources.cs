@@ -5,6 +5,7 @@ internal static class Sources
     public const string BuildsTheFixture = "Builds Ogooreck.Mcp.Fixture";
     public const string Fixture = "Ogooreck.Mcp.Fixture";
     public const string FailingTest = "Ogooreck.Mcp.Fixture.ProductTests.RegisteringAProduct_RespondsWithOk";
+    public const string HangingTest = "Ogooreck.Mcp.Fixture.ProductTests.WaitingForAResponseThatNeverComes";
     public const string FailingWhen = "src/dotnet/Ogooreck.Mcp.Fixture/ProductTests.cs:28";
 
     public static readonly string Server = Path.Combine(AppContext.BaseDirectory, "Ogooreck.Mcp.dll");

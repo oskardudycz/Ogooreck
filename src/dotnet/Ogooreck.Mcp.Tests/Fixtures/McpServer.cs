@@ -32,9 +32,10 @@ public sealed class McpServer: IAsyncLifetime
     public Task<CallToolResult> Call(string tool, Dictionary<string, object?> arguments) =>
         Client.CallToolAsync(tool, arguments, cancellationToken: TestContext.Current.CancellationToken).AsTask();
 
-    public async Task<TestRunResult> TestRun(string project, string[]? arguments = null)
+    public async Task<TestRunResult> TestRun(string project, string[]? arguments = null, int repeat = 1, int? hangTimeout = null)
     {
-        var result = await Call("ogooreck_test_run", new() { ["project"] = project, ["arguments"] = arguments });
+        var result = await Call("ogooreck_test_run",
+            new() { ["project"] = project, ["arguments"] = arguments, ["repeat"] = repeat, ["hangTimeout"] = hangTimeout });
         Assert.True(result.IsError is null or false, ToolResults.Text(result));
         return ToolResults.Structured<TestRunResult>(result);
     }

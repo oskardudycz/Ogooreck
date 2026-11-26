@@ -40,6 +40,20 @@ internal sealed class SpanTree
     public IEnumerable<CollectedSpan> AppSpansOf(CollectedSpan step) =>
         Spans.Where(span => span.TraceId == step.Attributes[StepTraceId]).OrderBy(span => span.Start);
 
+    public IEnumerable<CollectedSpan> AncestorsOf(CollectedSpan span)
+    {
+        for (var parent = Parent(span); parent is not null; parent = Parent(parent))
+            yield return parent;
+    }
+
+    public IEnumerable<CollectedSpan> DescendantsOf(CollectedSpan span) =>
+        ChildrenOf(span).SelectMany(child => DescendantsOf(child).Prepend(child));
+
+    public IEnumerable<IGrouping<string, CollectedSpan>> OgooreckSpansUnderSpansThatNeverEnded() =>
+        Spans.Where(span => span.Scope == OgooreckScope && span.ParentSpanId is not null && !byId.ContainsKey(span.ParentSpanId))
+            .OrderBy(span => span.Start)
+            .GroupBy(span => span.ParentSpanId!);
+
     public CollectedSpan? RunOf(CollectedSpan span)
     {
         var current = span;

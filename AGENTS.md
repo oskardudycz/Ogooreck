@@ -29,7 +29,7 @@ src/dotnet/
 ├── Ogooreck.RabbitMQ/                           the RabbitMQ plugin, published to NuGet as Ogooreck.RabbitMQ
 ├── Ogooreck.Mcp/                                MCP server that runs .NET tests and explains them with their spans, packed as the ogooreck-mcp dotnet tool
 ├── Ogooreck.Mcp.Tests/                          MCP server tests, run against the fixture below over stdio
-├── Ogooreck.Mcp.Fixture/                        test project the MCP tests run: passing, failing and skipped scenarios
+├── Ogooreck.Mcp.Fixture/                        test project the MCP tests run: passing, failing, skipped and hanging scenarios
 ├── Ogooreck.Tests/                              library tests
 ├── Ogooreck.Sample.Api/                         sample API used by the API tests
 ├── Ogooreck.Api.Tests/                          API testing samples
@@ -155,9 +155,10 @@ Report which verification commands were run, whether they passed, and why any re
 
 Start from the spans, not from the code. Ogooreck exists to explain test runs with telemetry, so use it on its own tests:
 
-1. Run the failing test project through the Ogooreck MCP server (`Ogooreck.Mcp`, the `ogooreck-mcp` tool): `ogooreck_test_run`, then `ogooreck_find_spans`, `ogooreck_slowest_steps` or `ogooreck_export_spans`. For a hang, pass `--blame-hang-timeout`, so the run ends and names the test that was running.
+1. Run the failing test project through the Ogooreck MCP server (`Ogooreck.Mcp`, the `ogooreck-mcp` tool, registered for Claude Code in `.mcp.json`): `ogooreck_test_run`, then `ogooreck_test_spans` for the span tree of the test, `ogooreck_concurrent_spans` for what ran at the same time as a span, `ogooreck_find_spans`, `ogooreck_slowest_steps` or `ogooreck_export_spans`. For a flaky test, pass `repeat`, so the tests run until the first failure. For a hang, pass `hangTimeout`, so the run is aborted and names the test that was running and the Ogooreck spans whose parent never ended.
 2. Read what the spans show: which step ran, which spans overlap it, which span failed, and which spans are missing. A test that has no Ogooreck span at all hung before its first step.
-3. State the cause with that evidence, for example "the `catch-up` span after `GET /orders` overlaps 14 `publish OrderPlaced` spans of other tests". Then write the failing test and the fix.
+3. If a test passes through the MCP server but fails in CI, run it with plain `dotnet test` too. The MCP server sets `OTEL_EXPORTER_OTLP_ENDPOINT`, which makes the test projects listen to every `ActivitySource`, and that can hide a bug in code that depends on having a listener.
+4. State the cause with that evidence, for example "the `catch-up` span after `GET /orders` overlaps 14 `publish OrderPlaced` spans of other tests". Then write the failing test and the fix.
 
 Read the code and the logs only after that, to explain what the spans show. If a run has no spans that explain the failure, say so, and say what telemetry was missing.
 

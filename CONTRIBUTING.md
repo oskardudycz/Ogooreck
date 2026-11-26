@@ -85,7 +85,7 @@ src/dotnet/
 ├── Ogooreck.RabbitMQ/                           the RabbitMQ plugin, published to NuGet as Ogooreck.RabbitMQ
 ├── Ogooreck.Mcp/                                MCP server that runs .NET tests and explains them with their spans, packed as the ogooreck-mcp dotnet tool
 ├── Ogooreck.Mcp.Tests/                          MCP server tests, run against the fixture below over stdio
-├── Ogooreck.Mcp.Fixture/                        test project the MCP tests run: passing, failing and skipped scenarios
+├── Ogooreck.Mcp.Fixture/                        test project the MCP tests run: passing, failing, skipped and hanging scenarios
 ├── Ogooreck.Tests/                              library tests
 ├── Ogooreck.Sample.Api/                         sample API used by the API tests
 ├── Ogooreck.Api.Tests/                          API testing samples
