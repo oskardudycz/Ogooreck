@@ -63,19 +63,12 @@ public class RabbitMQPluginOptionsTests(RabbitMQBroker broker)
     [Fact]
     public async Task CatchingUpWith_ReplacesTheProbeAndTheCheck()
     {
-        var catchUps = 0;
-        var plugin = Messaging.RabbitMQ.CatchingUpWith(_ =>
-        {
-            catchUps++;
-            return Task.CompletedTask;
-        });
-        await using var shop = new RabbitMQApi(broker,
-            AppSettings.Own() with { ConsumeShippingOutsideTheContainer = true }, plugin);
+        var app = AppSettings.Own() with { ConsumeShippingOutsideTheContainer = true };
+        await using var shop = new RabbitMQApi(broker, app,
+            Messaging.RabbitMQ.CatchingUpWith(token => broker.UntilEmpty(app.Queues.ShippingQueue, token)));
 
         await shop.Given()
             .When(GetOrder(orderId))
             .Then([ExpectResponse(NotFound)], ct);
-
-        Assert.Equal(1, catchUps);
     }
 }

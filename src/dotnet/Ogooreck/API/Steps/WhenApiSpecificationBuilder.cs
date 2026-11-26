@@ -116,8 +116,16 @@ public sealed class WhenApiSpecificationBuilder
         if (host.IsValueCreated)
             started = host.Value;
         else
-            using (Diagnostics.Start("start app", null, before))
-                started = host.Value;
+            using (var startingApp = Diagnostics.Start("start app", null, before))
+                try
+                {
+                    started = host.Value;
+                }
+                catch (Exception exception)
+                {
+                    startingApp.Fail(exception);
+                    throw;
+                }
         await settings.EnsureStarted(firstStep, before, ct);
         return started;
     }
@@ -139,8 +147,9 @@ public sealed class WhenApiSpecificationBuilder
 
         var traceId = default(ActivityTraceId);
         HttpRequestMessage? lastRequest = null;
+        StepHandler? sending = null;
         HttpResponseMessage? response = null;
-        string Where() => WhereOf(phase, step, lastRequest);
+        string Where() => WhereOf(phase, step, sending?.LastRequest ?? lastRequest);
         using var catchUp = new StepCatchUp(settings, ct);
 
         async Task<HttpResponseMessage?> Send(CancellationToken token)
@@ -149,6 +158,7 @@ public sealed class WhenApiSpecificationBuilder
             telemetry.Add(traceId);
             var traceparent = $"00-{traceId}-{ActivitySpanId.CreateRandom()}-01";
             var (client, handler) = started.CreateStepClient(traceparent, token);
+            sending = handler;
             using (client)
             {
                 try

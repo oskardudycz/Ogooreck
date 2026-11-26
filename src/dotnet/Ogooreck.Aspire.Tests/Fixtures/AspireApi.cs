@@ -4,7 +4,8 @@ namespace Ogooreck.Aspire.Tests.Fixtures;
 
 public sealed class AspireApi: ApiSpecification, IAsyncDisposable
 {
-    public static readonly OtlpReceiver Otlp = OtlpReceiver.Start();
+    public static readonly OtlpReceiver Otlp =
+        OtlpReceiver.Start(new OtlpReceiverOptions { ForwardTo = TestRunCollector.Endpoint });
 
     public static readonly AspireApp App = new(Otlp, withKafka: true);
 

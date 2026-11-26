@@ -151,6 +151,16 @@ While changing library code, identify and run the smallest relevant set of tests
 
 Report which verification commands were run, whether they passed, and why any relevant checks were skipped.
 
+### Investigating a failing or hanging test
+
+Start from the spans, not from the code. Ogooreck exists to explain test runs with telemetry, so use it on its own tests:
+
+1. Run the failing test project through the Ogooreck MCP server (`Ogooreck.Mcp`, the `ogooreck-mcp` tool): `ogooreck_test_run`, then `ogooreck_find_spans`, `ogooreck_slowest_steps` or `ogooreck_export_spans`. For a hang, pass `--blame-hang-timeout`, so the run ends and names the test that was running.
+2. Read what the spans show: which step ran, which spans overlap it, which span failed, and which spans are missing. A test that has no Ogooreck span at all hung before its first step.
+3. State the cause with that evidence, for example "the `catch-up` span after `GET /orders` overlaps 14 `publish OrderPlaced` spans of other tests". Then write the failing test and the fix.
+
+Read the code and the logs only after that, to explain what the spans show. If a run has no spans that explain the failure, say so, and say what telemetry was missing.
+
 ## Working rules
 
 - Use simple, direct, straightforward language (STE English). Keep explanations concise, example-based, and focused on the problem. Simplify without oversimplifying.

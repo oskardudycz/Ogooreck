@@ -310,6 +310,22 @@ public partial class ApiSpecification: IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Sets how long the base address function may take to start the app, 3 minutes by default. A start that takes longer fails the test and its <c>start app</c> span, instead of hanging the test run.
+    /// Raise it for an app that starts slowly, such as an Aspire app that pulls container images.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// spec.StartTimeout(TimeSpan.FromMinutes(5))
+    /// </code>
+    /// </example>
+    public ApiSpecification StartTimeout(TimeSpan startTimeout)
+    {
+        settings.EnsureConfigurable("StartTimeout(...)");
+        settings.StartTimeout = startTimeout;
+        return this;
+    }
+
+    /// <summary>
     /// Sets the clock that deadlines and waits use, <see cref="TimeProvider.System"/> by default. A test clock makes a test of a deadline run without waiting for real time.
     /// </summary>
     /// <example>
@@ -384,7 +400,12 @@ public partial class ApiSpecification: IDisposable, IAsyncDisposable
         Uri uri;
         try
         {
-            uri = address().GetAwaiter().GetResult();
+            uri = address().WaitAsync(settings.StartTimeout).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
+        {
+            throw new AssertionException(
+                $"Starting the host did not finish within {settings.StartTimeout}. Give the app more time with StartTimeout(...) if it starts slowly, or check what it waits for at startup.");
         }
         catch (Exception exception)
         {

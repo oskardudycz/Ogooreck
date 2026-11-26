@@ -45,7 +45,7 @@ public sealed class AspireApp(OtlpReceiver otlp, bool withKafka): IAsyncDisposab
         var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Ogooreck_Sample_Aspire_AppHost>(
             [$"--OtlpEndpoint={otlp.Endpoint}", $"--WithKafka={withKafka.ToString().ToLowerInvariant()}"], ct);
         var app = await builder.BuildAsync(ct);
-        await app.StartAsync(ct);
+        await app.StartAsync(ct).WaitAsync(StartTimeout, ct);
         await app.ResourceNotifications.WaitForResourceHealthyAsync("api", ct).WaitAsync(StartTimeout, ct);
         return app;
     }

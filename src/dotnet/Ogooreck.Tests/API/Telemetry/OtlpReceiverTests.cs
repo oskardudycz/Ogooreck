@@ -35,6 +35,37 @@ public class OtlpReceiverTests
     }
 
     [Fact]
+    public async Task ForwardTo_SendsWhatTheReceiverRecordsToAnotherOtlpEndpoint()
+    {
+        await using var collector = OtlpReceiver.Start();
+        var (forwardedSpans, forwardedMeasurements) = Attached(collector);
+        await using var receiver = OtlpReceiver.Start(new OtlpReceiverOptions { ForwardTo = collector.Endpoint });
+        var (spans, _) = Attached(receiver);
+
+        await Post(receiver, "v1/traces", TraceRequest(Span(TraceId, "b7ad6b7169203331", null, "GET /carts/{id}")));
+        await Post(receiver, "v1/metrics", MetricsRequest(Sum("orders.placed", Delta, IntegerPoint(1))));
+
+        Assert.Equal(["GET /carts/{id}"], spans.Items().Select(span => span.Name));
+        Assert.Equal(["GET /carts/{id}"], forwardedSpans.Items().Select(span => span.Name));
+        Assert.Equal(["orders.placed"], forwardedMeasurements.Items().Select(measurement => measurement.Instrument));
+    }
+
+    [Fact]
+    public async Task ForwardTo_AnEndpointThatIsGone_StillRecordsAndAcceptsTheExport()
+    {
+        var gone = OtlpReceiver.Start();
+        await gone.DisposeAsync();
+        await using var receiver = OtlpReceiver.Start(new OtlpReceiverOptions { ForwardTo = gone.Endpoint });
+        var (spans, _) = Attached(receiver);
+
+        var response = await Post(receiver, "v1/traces",
+            TraceRequest(Span(TraceId, "b7ad6b7169203331", null, "GET /carts/{id}")));
+
+        Assert.Equal(OK, response.StatusCode);
+        Assert.Equal(["GET /carts/{id}"], spans.Items().Select(span => span.Name));
+    }
+
+    [Fact]
     public async Task Decoder_ReadsSpanIdsNameAndStringIntDoubleBoolAttributes()
     {
         await using var receiver = OtlpReceiver.Start();

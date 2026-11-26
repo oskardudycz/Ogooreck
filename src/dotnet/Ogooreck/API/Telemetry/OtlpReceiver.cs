@@ -33,14 +33,18 @@ public sealed class OtlpReceiver: ITelemetrySource
 {
     private const string ProtobufContentType = "application/x-protobuf";
 
+    private static readonly HttpClient Forwarding = new();
+
     private readonly WebApplication app;
+    private readonly Uri? forwardTo;
     private readonly object gate = new();
     private readonly List<(Recorded<RecordedSpan> Spans, Recorded<RecordedMeasurement> Measurements)> sinks = [];
     private TaskCompletionSource nextMetricsExport = NewExport();
 
-    private OtlpReceiver(WebApplication app, bool waitForMetricsExport)
+    private OtlpReceiver(WebApplication app, bool waitForMetricsExport, Uri? forwardTo)
     {
         this.app = app;
+        this.forwardTo = forwardTo;
         WaitsForMetricsExport = waitForMetricsExport;
         MapExports();
         app.Start();
@@ -78,7 +82,7 @@ public sealed class OtlpReceiver: ITelemetrySource
         builder.Logging.ClearProviders();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         var app = builder.Build();
-        return new OtlpReceiver(app, options.WaitForMetricsExport);
+        return new OtlpReceiver(app, options.WaitForMetricsExport, options.ForwardTo);
     }
 
     /// <inheritdoc />
@@ -124,6 +128,19 @@ public sealed class OtlpReceiver: ITelemetrySource
     /// </example>
     public ValueTask DisposeAsync() => app.DisposeAsync();
 
+    private static async Task Forward(Uri endpoint, byte[] export, CancellationToken ct)
+    {
+        var content = new ByteArrayContent(export);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(ProtobufContentType);
+        try
+        {
+            using var _ = await Forwarding.PostAsync(endpoint, content, ct);
+        }
+        catch (HttpRequestException)
+        {
+        }
+    }
+
     private static TaskCompletionSource NewExport() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private void MapExports()
@@ -163,7 +180,7 @@ public sealed class OtlpReceiver: ITelemetrySource
         arrived.SetResult();
     }
 
-    private static async Task<IResult> Receive(HttpRequest request, Action<byte[]> record)
+    private async Task<IResult> Receive(HttpRequest request, Action<byte[]> record)
     {
         if (request.ContentType?.StartsWith(ProtobufContentType, StringComparison.OrdinalIgnoreCase) != true)
             return Results.Text(
@@ -181,6 +198,10 @@ public sealed class OtlpReceiver: ITelemetrySource
             return Results.Text($"The request body is not a valid protobuf message: {exception.Message}",
                 statusCode: StatusCodes.Status400BadRequest);
         }
+
+        if (forwardTo is { } target)
+            await Forward(new Uri(target, request.Path.ToString().TrimStart('/')), body.ToArray(),
+                request.HttpContext.RequestAborted);
 
         return Results.Bytes([], ProtobufContentType);
     }
