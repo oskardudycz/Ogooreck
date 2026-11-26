@@ -20,6 +20,8 @@ public class McpHostTests(McpServer server): IClassFixture<McpServer>
         Assert.Contains("ogooreck_find_spans", instructions);
         Assert.Contains("ogooreck_scenario_diagram", instructions);
         Assert.Contains("ogooreck_slowest_steps", instructions);
+        Assert.Contains("ogooreck_test_spans", instructions);
+        Assert.Contains("ogooreck_concurrent_spans", instructions);
     }
 
     [Fact]
@@ -28,12 +30,15 @@ public class McpHostTests(McpServer server): IClassFixture<McpServer>
         var tools = (await server.Client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken))
             .ToDictionary(tool => tool.Name, tool => tool.ProtocolTool.Annotations);
 
-        Assert.Equal(["ogooreck_export_spans", "ogooreck_find_spans", "ogooreck_scenario_diagram", "ogooreck_slowest_steps", "ogooreck_test_run"],
+        Assert.Equal(["ogooreck_concurrent_spans", "ogooreck_export_spans", "ogooreck_find_spans", "ogooreck_scenario_diagram",
+                "ogooreck_slowest_steps", "ogooreck_test_run", "ogooreck_test_spans"],
             tools.Keys.Order());
         Assert.All(tools.Values, annotations => Assert.False(string.IsNullOrEmpty(annotations?.Title)));
         Assert.True(tools["ogooreck_slowest_steps"]!.ReadOnlyHint);
         Assert.True(tools["ogooreck_find_spans"]!.ReadOnlyHint);
         Assert.True(tools["ogooreck_scenario_diagram"]!.ReadOnlyHint);
+        Assert.True(tools["ogooreck_test_spans"]!.ReadOnlyHint);
+        Assert.True(tools["ogooreck_concurrent_spans"]!.ReadOnlyHint);
         Assert.False(tools["ogooreck_test_run"]!.ReadOnlyHint);
     }
 }

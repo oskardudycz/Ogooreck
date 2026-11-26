@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ogooreck": {
+      "command": "dotnet",
+      "args": ["run", "--project", "src/dotnet/Ogooreck.Mcp", "--framework", "net10.0"]
+    }
+  }
+}

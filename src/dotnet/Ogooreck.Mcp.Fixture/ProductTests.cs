@@ -29,6 +29,16 @@ public class ProductTests
             .Then([ExpectResponse(OK)], TestContext.Current.CancellationToken);
     }
 
+    [Fact(Explicit = true)]
+    public async Task WaitingForAResponseThatNeverComes()
+    {
+        await using var api = For<Program>();
+
+        await api.Given(RegisterProduct())
+            .When(Request(NeverResponds))
+            .Then([ExpectResponse(OK)], TestContext.Current.CancellationToken);
+    }
+
     [Fact(Skip = "Shows how a skipped test is counted.")]
     public void RegisteringAProduct_WithoutAName() { }
 
@@ -41,6 +51,12 @@ public class ProductTests
     }
 
     private static readonly ActivitySource OwnSpans = new("Ogooreck.Mcp.Fixture");
+
+    private static async Task<HttpResponseMessage> NeverResponds(HttpClient client)
+    {
+        await Task.Delay(Timeout.Infinite, TestContext.Current.CancellationToken);
+        return new HttpResponseMessage();
+    }
 
     private static TestStep RegisterProduct() =>
         Request(client => client.PostAsJsonAsync("/api/products",

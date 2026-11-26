@@ -8,15 +8,22 @@ public sealed class TestRunner(SpanReceiver receiver)
     public const string VSTest = "VSTest";
     public const string TestingPlatform = "Microsoft.Testing.Platform";
 
-    public async Task<TestProcess> Run(string project, string[] arguments, string results, CancellationToken ct)
+    public async Task<TestProcess> Run(string project, string[] arguments, string results, int? hangTimeout,
+        CancellationToken ct)
     {
         if (!File.Exists(project) && !Directory.Exists(project))
             throw new McpException($"No test project at {Path.GetFullPath(project)}.");
 
         var runner = await RunnerOf(project, ct);
+        if (runner == TestingPlatform && hangTimeout is not null)
+            throw new McpException(
+                "hangTimeout works only for VSTest projects. For a Microsoft.Testing.Platform project, reference Microsoft.Testing.Extensions.HangDump and pass [\"--hangdump\", \"--hangdump-timeout\", \"30s\"] in arguments.");
+        string[] blame = hangTimeout is { } seconds
+            ? ["--blame-hang-timeout", $"{seconds}s", "--blame-hang-dump-type", "none"]
+            : [];
         string[] command = runner == TestingPlatform
             ? ["run", "--project", project, "--", "--report-trx", "--results-directory", results, .. arguments]
-            : ["test", project, "--logger", "trx", "--results-directory", results, .. arguments];
+            : ["test", project, "--logger", "trx", "--results-directory", results, .. blame, .. arguments];
         var (exitCode, output) = await Dotnet(command, ct);
         return new TestProcess(runner, exitCode, output);
     }
