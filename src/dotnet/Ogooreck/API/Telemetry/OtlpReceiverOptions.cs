@@ -14,4 +14,15 @@ public sealed class OtlpReceiverOptions
     /// </code>
     /// </example>
     public bool WaitForMetricsExport { get; init; }
+
+    /// <summary>
+    /// Another OTLP/HTTP endpoint that the receiver sends every export to after recording it, for example the collector of a test run from <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>,
+    /// so the app's spans show up next to the test's. An export the endpoint can't take is dropped, as an OpenTelemetry exporter drops it, and never fails the app's export.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// var otlp = OtlpReceiver.Start(new OtlpReceiverOptions { ForwardTo = new Uri(Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")!) });
+    /// </code>
+    /// </example>
+    public Uri? ForwardTo { get; init; }
 }

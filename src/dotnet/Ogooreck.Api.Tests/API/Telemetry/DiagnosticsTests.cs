@@ -13,7 +13,8 @@ namespace Ogooreck.Api.Tests.API.Telemetry;
 
 public class DiagnosticsTests(ApiSpecification<Program> api): IClassFixture<ApiSpecification<Program>>, IDisposable
 {
-    private static readonly ActivitySource TestSource = new("Ogooreck.Api.Tests.DiagnosticsTests");
+    private const string TestSourceName = "Ogooreck.Api.Tests.DiagnosticsTests";
+    private static readonly ActivitySource TestSource = new(TestSourceName);
 
     private readonly Guid cartId = Guid.NewGuid();
     private readonly OgooreckSpans spans = new();
@@ -78,7 +79,7 @@ public class DiagnosticsTests(ApiSpecification<Program> api): IClassFixture<ApiS
     {
         using var testSpans = new ActivityListener
         {
-            ShouldListenTo = source => source == TestSource,
+            ShouldListenTo = source => source.Name == TestSourceName,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
         };
         ActivitySource.AddActivityListener(testSpans);
@@ -122,6 +123,22 @@ public class DiagnosticsTests(ApiSpecification<Program> api): IClassFixture<ApiS
             spec.Given().When(GetCart(cartId)).Then([], TestContext.Current.CancellationToken));
 
         Assert.Equal(ActivityStatusCode.Error, RunOf($"When request GET /carts/{cartId}").Status);
+    }
+
+    [Fact]
+    public async Task HostThatDoesNotStartWithinTheStartTimeout_FailsTheRunAndItsStartSpan()
+    {
+        await using var app = For(() => new TaskCompletionSource<Uri>().Task)
+            .StartTimeout(TimeSpan.FromMilliseconds(50));
+
+        var error = await Assert.ThrowsAsync<AssertionException>(() =>
+            app.Given().When(GetCart(cartId)).Then([ExpectError(NotFound)], TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            "Starting the host did not finish within 00:00:00.0500000. Give the app more time with StartTimeout(...) if it starts slowly, or check what it waits for at startup.",
+            error.Message);
+        var start = spans.Stopped.Single(span => span.DisplayName == "start app" && span.StatusDescription == error.Message);
+        Assert.Equal(ActivityStatusCode.Error, start.Status);
     }
 
     [Fact]

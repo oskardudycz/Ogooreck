@@ -244,6 +244,28 @@ public class CatchUpFailureTests
     }
 
     [Fact]
+    public async Task CancellingThenAfterARequestOfAStepThatKeepsRunning_NamesTheRequest()
+    {
+        await using var api = For(() => Task.FromResult(new Uri("http://localhost")))
+            .CatchUp((step, ct) => step(ct));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        var stillRunning = new TaskCompletionSource<HttpResponseMessage>();
+
+        var error = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            api.Given()
+                .When(Request(async client =>
+                {
+                    await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync("/orders/1", Ct));
+                    await cancellation.CancelAsync();
+                    return await stillRunning.Task;
+                }))
+                .Then([ExpectResponse(OK)], cancellation.Token));
+        stillRunning.SetResult(new HttpResponseMessage(OK));
+
+        Assert.StartsWith("Then was cancelled while the When request GET /orders/1 was running.", error.Message);
+    }
+
+    [Fact]
     public async Task CancellingThenDuringAStepWhoseCancellationACatchUpSwallows_StillEndsWithOperationCanceled()
     {
         await using var api = For(() => Task.FromResult(new Uri("http://localhost")))

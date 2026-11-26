@@ -22,7 +22,7 @@ public class ScenarioDiagramTests(McpServer server): IClassFixture<McpServer>
         Assert.Equal("    participant Test", diagram[1]);
         Assert.Contains("    participant p1 as Ogooreck.Wolverine.Tests", diagram);
         Assert.Contains("    participant p2 as local://events/", diagram);
-        Assert.Contains("    participant p3 as local://ogooreck.sample.wolverine.expirecart/", diagram);
+        Assert.Contains("    participant p3 as local://ogooreck.sample.wolverine.carts.expiring.expirecart/", diagram);
         Assert.Contains(diagram, line => line.StartsWith("    Test->>p1: Given step 1 request POST /carts/"));
         Assert.Equal(
             ["Test->>p1: Given", "p2->>p1: ProductAdded", "Test->>p1: When action", "p3->>p1: ExpireCart", "p2->>p1: CartExpired"],

@@ -29,6 +29,8 @@ internal sealed class SpecificationSettings
 
     public TimeSpan Deadline { get; set; } = TimeSpan.FromSeconds(30);
 
+    public TimeSpan StartTimeout { get; set; } = TimeSpan.FromMinutes(3);
+
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 
     public Func<PublishRequest, CancellationToken, Task>? Publishing { get; private set; }
@@ -86,6 +88,7 @@ internal sealed class SpecificationSettings
         var copy = new SpecificationSettings
         {
             Deadline = Deadline,
+            StartTimeout = StartTimeout,
             Clock = Clock,
             Json = Json,
             Publishing = Publishing,

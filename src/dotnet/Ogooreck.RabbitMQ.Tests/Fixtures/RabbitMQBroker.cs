@@ -1,3 +1,4 @@
+using RabbitMQ.Client;
 using Testcontainers.RabbitMq;
 using Xunit;
 
@@ -10,6 +11,15 @@ public sealed class RabbitMQBroker: IAsyncLifetime
     public RabbitMQApi App { get; private set; } = null!;
 
     public string ConnectionString => container.GetConnectionString();
+
+    public async Task UntilEmpty(string queue, CancellationToken ct)
+    {
+        await using var connection =
+            await new ConnectionFactory { Uri = new Uri(ConnectionString) }.CreateConnectionAsync(ct);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: ct);
+        while (await channel.MessageCountAsync(queue, ct) > 0)
+            await Task.Delay(TimeSpan.FromMilliseconds(10), ct);
+    }
 
     public async ValueTask InitializeAsync()
     {
