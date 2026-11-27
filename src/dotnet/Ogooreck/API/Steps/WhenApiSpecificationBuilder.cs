@@ -181,6 +181,7 @@ public sealed class WhenApiSpecificationBuilder
             for (var attempt = 1; ; attempt++)
             {
                 var sent = (await Send(token))!;
+                token.ThrowIfCancellationRequested();
                 var attemptOutcome = new Outcome(sent, Where(), step.Kind, settings.Json ?? started.Json, traceId,
                     settings.Recordings.Items, telemetry, settings.Deadline, settings.Clock, ct);
                 var failure = await ResponseFailureOf(responseExpectations, attemptOutcome);
