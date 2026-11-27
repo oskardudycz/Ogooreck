@@ -1,6 +1,9 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using OpenTelemetry;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -35,7 +38,10 @@ internal static class McpHost
                 Spans come from test projects that export over OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set; ogooreck_test_run sets it. That turns on the test project's tracing, which may listen to every ActivitySource, so if a test passes here but fails in CI, run it with plain dotnet test too.
                 """)
             .WithStdioServerTransport()
-            .WithToolsFromAssembly();
+            .WithToolsFromAssembly(serializerOptions: new JsonSerializerOptions(McpJsonUtilities.DefaultOptions)
+            {
+                DefaultIgnoreCondition = JsonIgnoreCondition.Never
+            });
         await builder.Build().RunAsync();
     }
 }

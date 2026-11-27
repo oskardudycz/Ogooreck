@@ -21,13 +21,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [net10.0, net11.0]
 
     steps:
       - uses: actions/checkout@v7.0.1
 
       - uses: actions/setup-dotnet@v6.1.0
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Start the OpenTelemetry Collector that writes the spans of the tests
         run: |
@@ -42,16 +48,33 @@ jobs:
         env:
           OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
           OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
-        run: ./build.sh test
+        run: ./build.sh test --framework ${{ matrix.framework }}
 
       - name: Stop the OpenTelemetry Collector
         if: always()
         run: docker stop otel-collector
 
       - name: Upload the spans of the tests
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: spans
+          name: spans-${{ matrix.framework }}
           path: ${{ runner.temp }}/spans/spans.pb
           if-no-files-found: ignore
+
+  skill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Install the skill of the packed Ogooreck with dotnet-package-skills
+        working-directory: src/dotnet
+        run: ./build.sh test-skill

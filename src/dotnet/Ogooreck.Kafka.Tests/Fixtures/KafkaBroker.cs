@@ -41,6 +41,7 @@ public sealed class KafkaBroker: IAsyncLifetime
         await container.StartAsync();
         await NewTopic(KafkaOptions.DefaultTopic);
         await NewTopic(AppSettings.SharedTopic);
+        await NewTopic(ShopApi.Topic);
         App = new KafkaApi(this, AppSettings.Shared, Messaging.Kafka, new SharedFaultsPlugin(Faults));
         PublishOnly = new KafkaApi(this, AppSettings.WithoutShipping(), Messaging.Kafka, Consuming, PublishOnlyServices);
         await StartUntracedConsumersBeforeAnythingTraces();

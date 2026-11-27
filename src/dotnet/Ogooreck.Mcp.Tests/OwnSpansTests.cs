@@ -7,7 +7,6 @@ using static Ogooreck.Mcp.Tests.Fixtures.Sources;
 
 namespace Ogooreck.Mcp.Tests;
 
-[Collection(BuildsTheFixture)]
 public class OwnSpansTests
 {
     [Fact]
@@ -31,7 +30,7 @@ public class OwnSpansTests
             }
         }), cancellationToken: TestContext.Current.CancellationToken))
         {
-            await client.CallToolAsync("ogooreck_test_run", new Dictionary<string, object?> { ["project"] = Fixture },
+            await client.CallToolAsync("ogooreck_test_run", new Dictionary<string, object?> { ["project"] = Fixture, ["arguments"] = new[] { "--no-build" } },
                 cancellationToken: TestContext.Current.CancellationToken);
 
             await testRunExported.Task.WaitAsync(TestContext.Current.CancellationToken);

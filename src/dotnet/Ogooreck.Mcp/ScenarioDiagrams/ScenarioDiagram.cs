@@ -33,11 +33,11 @@ internal static class ScenarioDiagram
     }
 
     private static string DestinationOf(CollectedSpan span) =>
-        span.Attributes.GetValueOrDefault("messaging.destination.name", span.Attributes.GetValueOrDefault("messaging.destination", "?"));
+        span.Attribute("messaging.destination.name", span.Attribute("messaging.destination", "?"));
 
     private static string MessageTypeOf(CollectedSpan span)
     {
-        var type = span.Attributes.GetValueOrDefault("messaging.message_type", span.Name);
+        var type = span.Attribute("messaging.message_type", span.Name);
         return type[(type.LastIndexOf('.') + 1)..];
     }
 

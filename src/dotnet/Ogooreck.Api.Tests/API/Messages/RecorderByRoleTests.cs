@@ -235,7 +235,110 @@ public class RecorderByRoleTests(ApiSpecification<Program> api): IClassFixture<A
         await spec.Given().When(Adding(appended, new OrderPlaced(cartId))).Then([ExpectAppended(new OrderPlaced(cartId))], ct);
     }
 
+    [Fact]
+    public async Task ExpectNothingPublishedIn_ARecorderTheAppPublishedTo_FailsListingTheMessages()
+    {
+        await using var spec = api.With(setup => setup.Recording(published, observed => observed, NoWait));
+
+        var error = await Assert.ThrowsAsync<AssertionException>(() =>
+            spec.Given().When(Adding(published, new OrderPlaced(cartId))).Then([ExpectNothingPublishedIn(published)], ct));
+
+        Assert.Contains(nameof(OrderPlaced), error.Message);
+    }
+
+    [Fact]
+    public async Task ExpectPublished_OfTheRightTypeWithOtherContent_NamesTheDifferingField()
+    {
+        await using var spec = api.With(setup => setup.Recording(published, observed => observed, NoWait));
+
+        var error = await Assert.ThrowsAsync<AssertionException>(() =>
+            spec.Given().When(Adding(published, new OrderPlaced(cartId))).Then([ExpectPublished(new OrderPlaced(Guid.NewGuid()))], ct));
+
+        Assert.Contains("CartId", error.Message);
+    }
+
+    [Fact]
+    public async Task RecordingAroundEachStep_WaitsForTheStepsMessagesBeforeTheExpectations()
+    {
+        var sent = new TaskCompletionSource();
+        await using var spec = api.With(setup => setup.Recording(published, observed => observed,
+            async (step, token) => { await step(token); await sent.Task.WaitAsync(token); }));
+
+        await spec.Given().When(PublishingLater(published, sent, new OrderPlaced(cartId))).Then([ExpectPublished(new OrderPlaced(cartId))], ct);
+    }
+
+    [Fact]
+    public async Task CatchUpAroundEachStep_EndsWhenTheAppIsIdle()
+    {
+        var sent = new TaskCompletionSource();
+        await using var spec = api.With(setup => setup
+            .Recording(published, observed => observed, NoWait)
+            .CatchUp(async (step, token) => { await step(token); await sent.Task.WaitAsync(token); }));
+
+        await spec.Given().When(PublishingLater(published, sent, new OrderPlaced(cartId))).Then([ExpectPublished(new OrderPlaced(cartId))], ct);
+    }
+
+    [Fact]
+    public async Task PluginRecordingWithACatchUp_ChecksMessagesPublishedAfterTheResponse()
+    {
+        var sent = new TaskCompletionSource();
+        await using var spec = api.With(setup => setup.Use(new Registering(registration =>
+            registration.Recording(published, observed => observed, token => sent.Task.WaitAsync(token)))));
+
+        await spec.Given().When(PublishingLater(published, sent, new OrderPlaced(cartId))).Then([ExpectPublished(new OrderPlaced(cartId))], ct);
+    }
+
+    [Fact]
+    public async Task PluginRecordingAroundEachStep_ChecksMessagesPublishedAfterTheResponse()
+    {
+        var sent = new TaskCompletionSource();
+        await using var spec = api.With(setup => setup.Use(new Registering(registration =>
+            registration.Recording(published, observed => observed,
+                async (step, token) => { await step(token); await sent.Task.WaitAsync(token); }))));
+
+        await spec.Given().When(PublishingLater(published, sent, new OrderPlaced(cartId))).Then([ExpectPublished(new OrderPlaced(cartId))], ct);
+    }
+
+    [Fact]
+    public async Task PluginAppending_ChecksAppendedEvents_WithAndWithoutACatchUp()
+    {
+        var other = new Recorded<Observed>();
+        var sent = new TaskCompletionSource();
+        await using var spec = api.With(setup => setup.Use(new Registering(registration => registration
+            .Appending(appended, observed => observed)
+            .Appending(other, observed => observed, token => sent.Task.WaitAsync(token)))));
+
+        await spec.Given()
+            .When(Action(ctx =>
+            {
+                appended.Add(new Observed(new OrderPlaced(cartId), ctx.Traceparent));
+                PublishLater(other, sent, new CartClosed(cartId), ctx.Traceparent);
+                return Task.CompletedTask;
+            }))
+            .Then([ExpectAppendedIn(appended, new OrderPlaced(cartId)), ExpectAppendedIn(other, new CartClosed(cartId))], ct);
+    }
+
     private static Task NoWait(CancellationToken _) => Task.CompletedTask;
+
+    private sealed class Registering(Action<SpecificationPluginRegistration> register): ISpecificationPlugin
+    {
+        public void Register(SpecificationPluginRegistration registration) => register(registration);
+    }
+
+    private static TestStep PublishingLater(Recorded<Observed> recorder, TaskCompletionSource sent, object message) =>
+        Action(ctx =>
+        {
+            PublishLater(recorder, sent, message, ctx.Traceparent);
+            return Task.CompletedTask;
+        });
+
+    private static void PublishLater(Recorded<Observed> recorder, TaskCompletionSource sent, object message, string? traceparent) =>
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(50);
+            recorder.Add(new Observed(message, traceparent));
+            sent.SetResult();
+        });
 
     private sealed class AppendingAroundEachStep(Recorded<Observed> appended): ISpecificationPlugin
     {

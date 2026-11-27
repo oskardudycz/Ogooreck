@@ -13,6 +13,7 @@ public sealed class ConcurrentSpansTool(CollectedSpans collected, SourceFiles so
     [Description("Lists the spans of the last ogooreck_test_run that ran at the same time as a span, also those of other tests, each with its test and the source location of its When step. Use it for races, for example a catch-up or an expectation that saw the work of another test. The span is the first, by start, whose name matches a regular expression, ignoring case. Its parents and the spans under it are left out. Each span has its start in milliseconds from the start of the span, negative when it started before.")]
     public async Task<ConcurrentSpans> ConcurrentSpans(
         [Description("Regular expression for the span name, matched ignoring case, for example \"^catch-up$\" or \"When request POST /api/carts\".")] string pattern,
+        [Description("Only the spans of this service, for example the tested app, to leave out the others.")] string? service = null,
         [Description("How many spans to return.")] int limit = 50,
         [Description("Path of a JSON file to write all spans to instead of returning them. Use it for big runs, then search the file.")] string? filename = null,
         CancellationToken ct = default)
@@ -37,6 +38,7 @@ public sealed class ConcurrentSpansTool(CollectedSpans collected, SourceFiles so
             .Select(relative => relative.SpanId).ToHashSet();
         var concurrent = tree.Spans
             .Where(other => other.Start < span.End && other.End > span.Start && !related.Contains(other.SpanId))
+            .Where(other => service is null || other.Service == service)
             .OrderBy(other => other.Start)
             .Select(Describe)
             .ToArray();

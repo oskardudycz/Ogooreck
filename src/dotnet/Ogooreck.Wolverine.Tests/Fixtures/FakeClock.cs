@@ -4,6 +4,8 @@ using Ogooreck.API;
 
 namespace Ogooreck.Wolverine.Tests.Fixtures;
 
+#region FakeClockPlugin
+
 public sealed class FakeClock: ISpecificationPlugin
 {
     private readonly FakeTimeProvider time = new();
@@ -11,5 +13,8 @@ public sealed class FakeClock: ISpecificationPlugin
     public void Advance(TimeSpan by) => time.Advance(by);
 
     public void Register(SpecificationPluginRegistration registration) =>
-        registration.Services(services => services.AddSingleton<TimeProvider>(time));
+        registration.Services(services =>
+            services.AddSingleton<TimeProvider>(time));
 }
+
+#endregion

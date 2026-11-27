@@ -7,7 +7,6 @@ using static Ogooreck.Mcp.Tests.Fixtures.ToolResults;
 
 namespace Ogooreck.Mcp.Tests;
 
-[Collection(BuildsTheFixture)]
 public class McpHostTests(McpServer server): IClassFixture<McpServer>
 {
     [Fact]

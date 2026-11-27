@@ -23,12 +23,18 @@ internal sealed class Diagnostics: IDisposable
     public static readonly Histogram<double> Expectations = Meter.CreateHistogram<double>("ogooreck.expectation.duration", "s",
         "How long an expectation took, with its waiting.");
 
-    private readonly Activity? activity;
+    private readonly Activity activity;
     private readonly Histogram<double>? duration;
     private readonly long started = Stopwatch.GetTimestamp();
     private TagList tags;
 
-    private Diagnostics(Activity? activity, Histogram<double>? duration, TagList tags)
+    static Diagnostics() => ActivitySource.AddActivityListener(new ActivityListener
+    {
+        ShouldListenTo = source => source == Source,
+        Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData
+    });
+
+    private Diagnostics(Activity activity, Histogram<double>? duration, TagList tags)
     {
         this.activity = activity;
         this.duration = duration;
@@ -41,7 +47,7 @@ internal sealed class Diagnostics: IDisposable
         var previous = Activity.Current;
         Activity.Current = null;
         var activity = Source.StartActivity(name, ActivityKind.Internal,
-            parent is null ? previous?.Context ?? default : parent.activity?.Context ?? default);
+            parent is null ? previous?.Context ?? default : parent.activity.Context)!;
         Activity.Current = previous;
         var tags = new TagList();
         if (phase is not null)
@@ -49,25 +55,23 @@ internal sealed class Diagnostics: IDisposable
         return new Diagnostics(activity, duration, tags);
     }
 
-    public static Diagnostics Measure(Histogram<double> duration, string phase) =>
-        new(null, duration, new TagList { { "ogooreck.phase", phase } });
+    public static IDisposable Measure(Histogram<double> duration, string phase) => new Measurement(duration, phase);
 
     public Diagnostics Tag(string key, string value)
     {
-        activity?.SetTag(key, value);
+        activity.SetTag(key, value);
         return this;
     }
 
     public Diagnostics Tag(string key, int value)
     {
-        activity?.SetTag(key, value);
+        activity.SetTag(key, value);
         return this;
     }
 
     public Diagnostics Rename(string name)
     {
-        if (activity is not null)
-            activity.DisplayName = name;
+        activity.DisplayName = name;
         return this;
     }
 
@@ -81,8 +85,8 @@ internal sealed class Diagnostics: IDisposable
 
     public void Fail(Exception exception)
     {
-        activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
-        activity?.AddException(exception);
+        activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+        activity.AddException(exception);
         tags.Add("ogooreck.outcome", "failed");
     }
 
@@ -90,7 +94,15 @@ internal sealed class Diagnostics: IDisposable
     {
         duration?.Record(Stopwatch.GetElapsedTime(started).TotalSeconds, tags);
         var previous = Activity.Current;
-        activity?.Stop();
+        activity.Stop();
         Activity.Current = previous;
+    }
+
+    private sealed class Measurement(Histogram<double> duration, string phase): IDisposable
+    {
+        private readonly long started = Stopwatch.GetTimestamp();
+
+        public void Dispose() =>
+            duration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds, new KeyValuePair<string, object?>("ogooreck.phase", phase));
     }
 }

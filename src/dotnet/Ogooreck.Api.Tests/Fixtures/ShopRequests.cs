@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Ogooreck.API;
 using Xunit;
@@ -5,22 +6,56 @@ using static Ogooreck.API.ApiSpecification;
 
 namespace Ogooreck.Api.Tests.Fixtures;
 
+#region ApiRequests
+
 public static class ShopRequests
 {
     public static TestStep CreateCart() =>
-        Request(client => client.PostAsync("/carts", null, TestContext.Current.CancellationToken));
+        Request(client => client.PostAsync("/carts", null,
+            TestContext.Current.CancellationToken));
 
     public static TestStep AddProduct(Guid cartId, string product) =>
-        Request(client => client.PostAsJsonAsync($"/carts/{cartId}/products", new { product }, TestContext.Current.CancellationToken));
-
-    public static TestStep ConfirmCart(Guid cartId) =>
-        Request(client => client.PostAsync($"/carts/{cartId}/confirmation", null, TestContext.Current.CancellationToken));
+        Request(client => client.PostAsJsonAsync($"/carts/{cartId}/products",
+            new { product }, TestContext.Current.CancellationToken));
 
     public static TestStep GetCart(Guid cartId) =>
-        Request(client => client.GetAsync($"/carts/{cartId}", TestContext.Current.CancellationToken));
+        Request(client => client.GetAsync($"/carts/{cartId}",
+            TestContext.Current.CancellationToken));
+
+    public static TestStep ConfirmCart(Guid cartId, long version) =>
+        Request(client =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Put,
+                $"/carts/{cartId}/confirmation");
+            request.Headers.IfMatch.Add(
+                EntityTagHeaderValue.Parse(WeakETag(version)));
+            return client.SendAsync(request,
+                TestContext.Current.CancellationToken);
+        });
+
+    public static TestStep RemoveProduct(Guid cartId, string product,
+        long version) =>
+        Request(client =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Delete,
+                $"/carts/{cartId}/products/{product}");
+            request.Headers.IfMatch.Add(
+                EntityTagHeaderValue.Parse(WeakETag(version)));
+            return client.SendAsync(request,
+                TestContext.Current.CancellationToken);
+        });
 
     public static TestStep PlaceOrder(Guid cartId) =>
-        Request(client => client.PostAsync($"/carts/{cartId}/orders", null, TestContext.Current.CancellationToken));
+        Request(client => client.PostAsync($"/carts/{cartId}/orders", null,
+            TestContext.Current.CancellationToken));
+
+    #endregion
+
+    public static TestStep ConfirmCart(Guid cartId) =>
+        Request(client => client.PutAsync($"/carts/{cartId}/confirmation", null, TestContext.Current.CancellationToken));
+
+    public static TestStep GetCartSummary(Guid cartId) =>
+        Request(client => client.GetAsync($"/carts/{cartId}/summary", TestContext.Current.CancellationToken));
 
     public static TestStep PlaceOrder(Guid cartId, string correlationId) =>
         Request(client =>

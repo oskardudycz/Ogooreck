@@ -2,6 +2,12 @@
   "version": 1,
   "isRoot": true,
   "tools": {
+    "dotnet-package-skills": {
+      "version": "0.1.0-beta.26530.1",
+      "commands": [
+        "dotnet-package-skills"
+      ]
+    },
     "fantomas": {
       "version": "8.1.1",
       "commands": [

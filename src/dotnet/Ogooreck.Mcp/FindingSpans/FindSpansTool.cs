@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using ModelContextProtocol.Server;
 
@@ -20,7 +21,7 @@ public sealed class FindSpansTool(CollectedSpans collected, SourceFiles sources)
         var tree = new SpanTree(collected.All());
         var matches = tree.Spans
             .Where(span => regex.IsMatch(span.Name) || regex.IsMatch(span.Error ?? "") ||
-                           span.Attributes.Any(attribute => regex.IsMatch(attribute.Key) || regex.IsMatch(attribute.Value)))
+                           span.Attributes.Any(attribute => regex.IsMatch(attribute.Key) || Matches(regex, attribute.Value)))
             .OrderBy(span => span.Start)
             .Select(span => (Span: span, Run: tree.RunOf(span)))
             .Select(found => new FoundSpan(found.Span.Name, found.Span.Scope, found.Span.Service, tree.PathOf(found.Span),
@@ -32,9 +33,12 @@ public sealed class FindSpansTool(CollectedSpans collected, SourceFiles sources)
             ? new FoundSpans(matches.Length, matches.Take(limit).ToArray(), null)
             : new FoundSpans(matches.Length, [], await JsonFiles.Write(filename, matches, ct));
     }
+
+    private static bool Matches(Regex regex, JsonNode value) =>
+        value is JsonArray items ? items.Any(item => Matches(regex, item!)) : regex.IsMatch(value.ToString());
 }
 
 public sealed record FoundSpans(int Total, FoundSpan[] Spans, string? File);
 
 public sealed record FoundSpan(string Name, string Scope, string Service, string[] Path, string? Test, string? Location,
-    double Milliseconds, string? Error, IReadOnlyDictionary<string, string> Attributes);
+    double Milliseconds, string? Error, IReadOnlyDictionary<string, JsonNode> Attributes);

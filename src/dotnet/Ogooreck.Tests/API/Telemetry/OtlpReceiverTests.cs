@@ -274,6 +274,74 @@ public class OtlpReceiverTests
         await collecting.WaitAsync(TimeSpan.FromSeconds(10), Ct);
     }
 
+    private static readonly byte[] AppExport = MetricsRequestFrom("api", "app-instance");
+    private static readonly byte[] CliExport = MetricsRequestFrom("dotnet-cli", "cli-instance");
+
+    private static async Task ExportEvery500Milliseconds(OtlpReceiver receiver, FakeTimeProvider clock,
+        params byte[][] exports)
+    {
+        foreach (var export in exports)
+            await Post(receiver, "v1/metrics", export);
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        foreach (var export in exports)
+            await Post(receiver, "v1/metrics", export);
+    }
+
+    private static async Task<bool> Completes(Task task) =>
+        await Task.WhenAny(task, Task.Delay(TimeSpan.FromMilliseconds(200), Ct)) == task;
+
+    [Fact]
+    public async Task Collect_WithWaitForMetricsExport_WaitsForTwoExportsFromEachSenderThatIsExporting()
+    {
+        var clock = new FakeTimeProvider();
+        await using var receiver = OtlpReceiver.Start(new OtlpReceiverOptions { WaitForMetricsExport = true }, clock);
+        Attached(receiver);
+        await ExportEvery500Milliseconds(receiver, clock, AppExport, CliExport);
+
+        var collecting = receiver.Collect(Ct);
+        await Post(receiver, "v1/metrics", CliExport);
+        await Post(receiver, "v1/metrics", CliExport);
+        Assert.False(await Completes(collecting));
+        await Post(receiver, "v1/metrics", AppExport);
+        await Post(receiver, "v1/metrics", AppExport);
+
+        await collecting.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+    }
+
+    [Fact]
+    public async Task Collect_WithWaitForMetricsExport_StopsWaitingForASenderSilentForTwiceItsInterval()
+    {
+        var clock = new FakeTimeProvider();
+        await using var receiver = OtlpReceiver.Start(new OtlpReceiverOptions { WaitForMetricsExport = true }, clock);
+        Attached(receiver);
+        await ExportEvery500Milliseconds(receiver, clock, AppExport, CliExport);
+
+        var collecting = receiver.Collect(Ct);
+        await Post(receiver, "v1/metrics", AppExport);
+        await Post(receiver, "v1/metrics", AppExport);
+        Assert.False(await Completes(collecting));
+        clock.Advance(TimeSpan.FromSeconds(1));
+
+        await collecting.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+    }
+
+    [Fact]
+    public async Task Collect_WithWaitForMetricsExportOfAService_WaitsOnlyForThatServicesExports()
+    {
+        await using var receiver = OtlpReceiver.Start(
+            new OtlpReceiverOptions { WaitForMetricsExport = true, ServiceName = "api" });
+        Attached(receiver);
+
+        var collecting = receiver.Collect(Ct);
+        await Post(receiver, "v1/metrics", MetricsRequestFrom("dotnet-cli"));
+        await Post(receiver, "v1/metrics", MetricsRequestFrom("dotnet-cli"));
+        Assert.False(await Completes(collecting));
+        await Post(receiver, "v1/metrics", MetricsRequestFrom("api"));
+        await Post(receiver, "v1/metrics", MetricsRequestFrom("api"));
+
+        await collecting.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+    }
+
     [Fact]
     public async Task Collect_WithWaitForMetricsExport_EndsWhenCancelled()
     {

@@ -16,6 +16,9 @@ public class DefaultTelemetryDisposalTests
     public async Task Disposing_ASpecification_StopsItsDefaultInProcessListeners(bool asynchronous)
     {
         using var source = new ActivitySource($"test-{Guid.NewGuid()}");
+        bool listenedToBefore;
+        using (var before = source.StartActivity("before the specification"))
+            listenedToBefore = before is not null;
         var spec = For<Program>();
         await spec.Given().When(CreateCart()).Then([ExpectResponse(Created)], TestContext.Current.CancellationToken);
         using (var listening = source.StartActivity("while listening"))
@@ -27,7 +30,7 @@ public class DefaultTelemetryDisposalTests
             spec.Dispose();
 
         using var afterwards = source.StartActivity("after dispose");
-        Assert.Null(afterwards);
+        Assert.Equal(listenedToBefore, afterwards is not null);
     }
 
     [Theory]

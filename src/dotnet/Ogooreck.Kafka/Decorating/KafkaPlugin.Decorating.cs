@@ -175,7 +175,7 @@ public sealed class KafkaPlugin<TKey, TValue>: IDerivedPlugin
             if (own.Length == 0)
                 return;
 
-            using (var waiting = KafkaTracing.Source.StartActivity("Kafka wait for the consumers' assignment and fetching"))
+            using (var waiting = KafkaTracing.Source.StartActivity("Kafka wait for the consumers' assignment and fetching")!)
                 await Until(async () =>
                     {
                         foreach (var consumer in own)
@@ -215,7 +215,7 @@ public sealed class KafkaPlugin<TKey, TValue>: IDerivedPlugin
                     $"The broker did not answer within {limit.TotalSeconds:0.#} seconds. {Report(own, CachedEnds(own))}".TrimEnd());
             }
 
-            using (var waiting = KafkaTracing.Source.StartActivity("Kafka wait for the consumers to catch up"))
+            using (var waiting = KafkaTracing.Source.StartActivity("Kafka wait for the consumers to catch up")!)
                 await Until(() => Task.FromResult<string?>(Report(own, ends)), limit, started, ct, waiting);
         }
 
@@ -300,13 +300,13 @@ public sealed class KafkaPlugin<TKey, TValue>: IDerivedPlugin
             consumer.Ask(admin => KafkaGroups.EndOffsets(admin, consumer.Inner.Assignment));
 
         private async Task Until(Func<Task<string?>> problem, TimeSpan limit, long started, CancellationToken ct,
-            Activity? waiting)
+            Activity waiting)
         {
             string? last = null;
             while (await problem() is { Length: > 0 } found)
             {
                 if (found != last)
-                    waiting?.AddEvent(new ActivityEvent(last = found));
+                    waiting.AddEvent(new ActivityEvent(last = found));
                 if (registration.Clock.GetElapsedTime(started) >= limit)
                     throw new AssertionException($"{found}, after waiting {limit.TotalSeconds:0.#} seconds.");
                 await Task.Delay(PollInterval, registration.Clock, ct);

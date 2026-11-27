@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Globalization;
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
@@ -227,7 +228,12 @@ internal static class StructuralComparison
             return true;
         if (actual.GetType() == expected.GetType() || !IsNumber(actual) || !IsNumber(expected))
             return false;
-        return ConvertsExactly(actual, expected) && ConvertsExactly(expected, actual);
+        return (actual, expected) switch
+        {
+            (decimal number, float or double) => SameNumber(number, Convert.ToDouble(expected, CultureInfo.InvariantCulture)),
+            (float or double, decimal number) => SameNumber(number, Convert.ToDouble(actual, CultureInfo.InvariantCulture)),
+            _ => ConvertsExactly(actual, expected) && ConvertsExactly(expected, actual)
+        };
     }
 
     private static bool ConvertsExactly(object source, object target)
@@ -238,6 +244,31 @@ internal static class StructuralComparison
             return converted.Equals(target) && source.Equals(Convert.ChangeType(converted, source.GetType(), CultureInfo.InvariantCulture));
         }
         catch (Exception e) when (e is InvalidCastException or OverflowException or FormatException) { return false; }
+    }
+
+    private static bool SameNumber(decimal number, double binary)
+    {
+        if (!double.IsFinite(binary))
+            return false;
+
+        var parts = decimal.GetBits(number);
+        var digits = (new BigInteger((uint)parts[2]) << 64) | (new BigInteger((uint)parts[1]) << 32) | (uint)parts[0];
+        var bits = BitConverter.DoubleToInt64Bits(binary);
+        var exponent = (int)((bits >> 52) & 0x7FF);
+        var mantissa = new BigInteger(bits & 0xFFFFFFFFFFFFF);
+        if (exponent == 0)
+            exponent = 1;
+        else
+            mantissa += BigInteger.One << 52;
+        exponent -= 1075;
+
+        if (digits.IsZero || mantissa.IsZero)
+            return digits.IsZero && mantissa.IsZero;
+        if (number < 0 != bits < 0)
+            return false;
+        return exponent < 0
+            ? digits << -exponent == mantissa * BigInteger.Pow(10, number.Scale)
+            : digits == (mantissa << exponent) * BigInteger.Pow(10, number.Scale);
     }
 
     private static bool IsNumber(object value) => value is sbyte or byte or short or ushort or int or uint or long or ulong or float or double or decimal;

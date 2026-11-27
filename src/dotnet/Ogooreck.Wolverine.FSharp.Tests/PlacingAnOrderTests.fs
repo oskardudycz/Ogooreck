@@ -8,6 +8,7 @@ open Shop
 open Xunit
 open type Ogooreck.API.ApiSpecification
 
+// begin-snippet: FSharpApiTest
 [<Fact>]
 let ``placing an order publishes OrderPlaced`` () =
     task {
@@ -30,6 +31,7 @@ let ``placing an order publishes OrderPlaced`` () =
                     TestContext.Current.CancellationToken
                 )
     }
+// end-snippet
 
 [<Fact>]
 let ``an unexpected published message fails with the numbered list`` () =

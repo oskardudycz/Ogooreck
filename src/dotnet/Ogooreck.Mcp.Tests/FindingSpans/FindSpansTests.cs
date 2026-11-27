@@ -7,13 +7,12 @@ using static Ogooreck.Mcp.Tests.Fixtures.ToolResults;
 
 namespace Ogooreck.Mcp.Tests.FindingSpans;
 
-[Collection(BuildsTheFixture)]
-public class FindSpansTests(McpServer server): IClassFixture<McpServer>
+public class FindSpansTests(SharedRuns runs)
 {
     [Fact]
     public async Task FindSpans_ReturnEachMatchWithItsPathTestAndLine()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
 
         var found = Structured<FoundSpans>(await server.Call("ogooreck_find_spans",
             new() { ["pattern"] = "expected <200 ok>" }));
@@ -26,7 +25,7 @@ public class FindSpansTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task FindSpans_OfTheApp_LeadToTheTestThatSentTheRequest()
     {
-        await server.TestRun(Fixture, ["--filter", "FullyQualifiedName~RespondsWithOk"]);
+        var server = (await runs.Of(Fixture, "--filter", "FullyQualifiedName~RespondsWithOk")).Server;
 
         var found = Structured<FoundSpans>(await server.Call("ogooreck_find_spans",
             new() { ["pattern"] = "^POST /api/products" }));
@@ -37,7 +36,7 @@ public class FindSpansTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task FindSpans_OutsideOfAnOgooreckRun_HaveNoTestOrLocation()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
 
         var found = Structured<FoundSpans>(await server.Call("ogooreck_find_spans", new() { ["pattern"] = "^own\\.ratio$" }));
 
@@ -46,16 +45,44 @@ public class FindSpansTests(McpServer server): IClassFixture<McpServer>
         Assert.Null(span.Test);
         Assert.Null(span.Location);
         Assert.Null(span.Error);
-        Assert.Equal("true", span.Attributes["own.done"]);
-        Assert.Equal("false", span.Attributes["own.retried"]);
-        Assert.Equal("0.5", span.Attributes["own.ratio"]);
-        Assert.DoesNotContain("own.labels", span.Attributes.Keys);
+        Assert.Equal("true", span.Attributes["own.done"].GetValue<string>());
+        Assert.Equal("false", span.Attributes["own.retried"].GetValue<string>());
+        Assert.Equal("0.5", span.Attributes["own.ratio"].GetValue<string>());
+        Assert.Equal("NaN", span.Attributes["own.unknown"].GetValue<string>());
+        Assert.Equal("""["first","second"]""", span.Attributes["own.labels"].ToJsonString());
+        Assert.Equal("[1,2]", span.Attributes["own.attempts"].ToJsonString());
+    }
+
+    [Fact]
+    public async Task FindSpans_MatchTheItemsOfAnArrayAttribute()
+    {
+        var server = (await runs.Of(Fixture)).Server;
+
+        var byItem = Structured<FoundSpans>(await server.Call("ogooreck_find_spans", new() { ["pattern"] = "^second$" }));
+        var byJoinedItems = Structured<FoundSpans>(await server.Call("ogooreck_find_spans",
+            new() { ["pattern"] = "^first\",\"second$" }));
+
+        Assert.Equal("own work", Assert.Single(byItem.Spans).Name);
+        Assert.Equal(0, byJoinedItems.Total);
+    }
+
+    [Fact]
+    public async Task FindSpans_ExportedToAFile_KeepArrayAttributes()
+    {
+        var server = (await runs.Of(Fixture)).Server;
+        var file = server.FileIn("own.json");
+
+        await server.Call("ogooreck_find_spans", new() { ["pattern"] = "^own\\.ratio$", ["filename"] = file });
+
+        var written = JsonSerializer.Deserialize<FoundSpan[]>(await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken),
+            JsonSerializerOptions.Web)!;
+        Assert.Equal("""["first","second"]""", Assert.Single(written).Attributes["own.labels"].ToJsonString());
     }
 
     [Fact]
     public async Task FindSpans_ReturnOnlyTheLimit_AndCountAllMatches()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
 
         var found = Structured<FoundSpans>(await server.Call("ogooreck_find_spans",
             new() { ["pattern"] = ".", ["limit"] = 2 }));
@@ -67,7 +94,7 @@ public class FindSpansTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task FindSpans_WithAFilename_WriteTheMatchesToTheFileInsteadOfTheResponse()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
         var file = server.FileIn("found.json");
 
         var found = Structured<FoundSpans>(await server.Call("ogooreck_find_spans",

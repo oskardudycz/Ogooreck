@@ -163,4 +163,16 @@ public static class OtlpPayloads
             foreach (var metric in metrics)
                 scope.Nested(2, metric);
         })))));
+
+    public static byte[] MetricsRequestFrom(string service, string? instance = null) =>
+        Message(request => request.Nested(1, Message(resourceMetrics =>
+        {
+            resourceMetrics.Nested(1, Message(resource =>
+            {
+                resource.Nested(1, Text("service.name", service));
+                if (instance is not null)
+                    resource.Nested(1, Text("service.instance.id", instance));
+            }));
+            resourceMetrics.Nested(2, Message(scope => scope.Nested(2, Sum("orders.placed", Delta, IntegerPoint(1)))));
+        })));
 }

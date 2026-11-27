@@ -2,10 +2,10 @@
 set -euo pipefail
 
 version="$(dotnet --version)"
-if [[ $version = 10.* ]]; then
+if [[ $version = 11.* ]]; then
   target_framework="net10.0"
 else
-  echo "BUILD FAILURE: .NET 10 SDK required to run build, found $version"
+  echo "BUILD FAILURE: .NET 11 SDK required to run build, found $version"
   exit 1
 fi
 

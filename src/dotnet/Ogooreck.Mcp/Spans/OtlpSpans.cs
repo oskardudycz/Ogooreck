@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json.Nodes;
 using Google.Protobuf;
 
 namespace Ogooreck.Mcp;
@@ -14,13 +15,14 @@ internal static class OtlpSpans
         var spans = new List<CollectedSpan>();
         foreach (var resourceSpans in FieldsOf(request, 1))
         {
-            var service = FieldsOf(resourceSpans, 1).Select(AttributesOf).FirstOrDefault([])
-                .GetValueOrDefault("service.name", "");
+            var resource = FieldsOf(resourceSpans, 1).Select(AttributesOf).FirstOrDefault([]);
+            var service = resource.GetValueOrDefault("service.name")?.ToString() ?? "";
+            var instance = resource.GetValueOrDefault("service.instance.id")?.ToString() ?? "";
             foreach (var scopeSpans in FieldsOf(resourceSpans, 2))
             {
                 var scope = FieldsOf(scopeSpans, 1).Select(scope => FieldsOf(scope, 1).Select(Encoding.UTF8.GetString).FirstOrDefault(""))
                     .FirstOrDefault("");
-                spans.AddRange(FieldsOf(scopeSpans, 2).Select(span => Span(span, service, scope)));
+                spans.AddRange(FieldsOf(scopeSpans, 2).Select(span => Span(span, service, instance, scope)));
             }
         }
 
@@ -40,21 +42,21 @@ internal static class OtlpSpans
         }
     }
 
-    private static Dictionary<string, string> AttributesOf(byte[] resource)
+    private static Dictionary<string, JsonNode> AttributesOf(byte[] resource)
     {
-        var attributes = new Dictionary<string, string>();
+        var attributes = new Dictionary<string, JsonNode>();
         foreach (var keyValue in FieldsOf(resource, 1))
             AddAttribute(keyValue, attributes);
         return attributes;
     }
 
-    private static CollectedSpan Span(byte[] message, string service, string scope)
+    private static CollectedSpan Span(byte[] message, string service, string instance, string scope)
     {
         string traceId = "", spanId = "", name = "";
         string? parentSpanId = null, error = null;
         ulong start = 0, end = 0;
         var kind = 0;
-        var attributes = new Dictionary<string, string>();
+        var attributes = new Dictionary<string, JsonNode>();
         var input = new CodedInputStream(message);
         uint tag;
         while ((tag = input.ReadTag()) != 0)
@@ -94,7 +96,7 @@ internal static class OtlpSpans
             }
         }
 
-        return new CollectedSpan(service, scope, traceId, spanId, parentSpanId, name, Kinds[kind], FromUnixNanoseconds(start),
+        return new CollectedSpan(service, instance, scope, traceId, spanId, parentSpanId, name, Kinds[kind], FromUnixNanoseconds(start),
             FromUnixNanoseconds(end), error, attributes);
     }
 
@@ -118,10 +120,10 @@ internal static class OtlpSpans
         return code == ErrorStatus ? message : null;
     }
 
-    private static void AddAttribute(byte[] keyValue, Dictionary<string, string> attributes)
+    private static void AddAttribute(byte[] keyValue, Dictionary<string, JsonNode> attributes)
     {
         var key = "";
-        string? value = null;
+        JsonNode? value = null;
         var input = new CodedInputStream(keyValue);
         uint tag;
         while ((tag = input.ReadTag()) != 0)
@@ -133,12 +135,12 @@ internal static class OtlpSpans
         }
 
         if (value is not null)
-            attributes[key] = value;
+            attributes[key] = value is JsonArray ? value : value.ToString();
     }
 
-    private static string? ValueOf(byte[] anyValue)
+    private static JsonNode? ValueOf(byte[] anyValue)
     {
-        string? value = null;
+        JsonNode? value = null;
         var input = new CodedInputStream(anyValue);
         uint tag;
         while ((tag = input.ReadTag()) != 0)
@@ -149,13 +151,17 @@ internal static class OtlpSpans
                     value = input.ReadString();
                     break;
                 case 16:
-                    value = input.ReadBool().ToString().ToLowerInvariant();
+                    value = input.ReadBool();
                     break;
                 case 24:
-                    value = input.ReadInt64().ToString(CultureInfo.InvariantCulture);
+                    value = input.ReadInt64();
                     break;
                 case 33:
-                    value = input.ReadDouble().ToString(CultureInfo.InvariantCulture);
+                    var number = input.ReadDouble();
+                    value = double.IsFinite(number) ? number : number.ToString(CultureInfo.InvariantCulture);
+                    break;
+                case 42:
+                    value = new JsonArray(FieldsOf(input.ReadBytes().ToByteArray(), 1).Select(ValueOf).OfType<JsonNode>().ToArray());
                     break;
                 default:
                     input.SkipLastField();
