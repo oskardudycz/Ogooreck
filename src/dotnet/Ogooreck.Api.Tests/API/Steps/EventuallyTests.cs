@@ -78,6 +78,51 @@ public class EventuallyTests(ApiSpecification<Program> api): IClassFixture<ApiSp
     }
 
     [Fact]
+    public async Task Eventually_CancelledWhenTheResponseArrives_StopsBeforeCheckingTheResponse()
+    {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var responseChecked = false;
+        var attempts = 0;
+        var cancelledRequest = Request(async client =>
+        {
+            attempts++;
+            var response = await client.GetAsync($"/carts/{cartId}", ct);
+            await cancellation.CancelAsync();
+            return response;
+        });
+
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            api.Given().When(Eventually(cancelledRequest))
+                .Then([ExpectResponse(NotFound, Satisfying(_ => responseChecked = true))], cancellation.Token));
+
+        Assert.Equal($"Then was cancelled while the When eventually request GET /carts/{cartId} was running.",
+            error.Message);
+        Assert.Equal(cancellation.Token, error.CancellationToken);
+        Assert.False(responseChecked);
+        Assert.Equal(1, attempts);
+    }
+
+    [Fact]
+    public async Task Eventually_CancelledWhenAMismatchedResponseArrives_ReportsOnlyCancellation()
+    {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var cancelledRequest = Request(async client =>
+        {
+            var response = await client.GetAsync($"/carts/{cartId}", ct);
+            await cancellation.CancelAsync();
+            return response;
+        });
+
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            api.Given().When(Eventually(cancelledRequest))
+                .Then([ExpectResponse(OK)], cancellation.Token));
+
+        Assert.Equal($"Then was cancelled while the When eventually request GET /carts/{cartId} was running.",
+            error.Message);
+        Assert.IsAssignableFrom<OperationCanceledException>(error.InnerException);
+    }
+
+    [Fact]
     public async Task Then_CancelledWhileCatchingUp_SaysItWasWaitingForCatchUp()
     {
         using var cancellation = new CancellationTokenSource();
