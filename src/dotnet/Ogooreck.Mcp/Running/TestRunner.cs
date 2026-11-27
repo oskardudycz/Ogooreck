@@ -12,7 +12,7 @@ public sealed class TestRunner(SpanReceiver receiver, CollectedSpans collected)
     public const string TestingPlatform = "Microsoft.Testing.Platform";
 
     public async Task<TestProcess> Run(string project, string[] arguments, string results, int? hangTimeout,
-        CancellationToken ct)
+        bool coverage, CancellationToken ct)
     {
         if (!File.Exists(project) && !Directory.Exists(project))
             throw new McpException(
@@ -29,11 +29,19 @@ public sealed class TestRunner(SpanReceiver receiver, CollectedSpans collected)
         string? workingDirectory = null;
         if (runner == TestingPlatform)
         {
-            command = ["test", "--project", project, "--report-trx", "--results-directory", results, .. arguments];
+            command =
+            [
+                "test", "--project", project, "--report-trx", "--results-directory", results,
+                .. coverage ? ["--coverage", "--coverage-output-format", "cobertura"] : Array.Empty<string>(), .. arguments
+            ];
             workingDirectory = await OptedIntoTestingPlatform(projectDirectory, results, ct);
         }
         else
-            command = ["test", project, "--logger", "trx", "--results-directory", results, .. blame, .. arguments];
+            command =
+            [
+                "test", project, "--logger", "trx", "--results-directory", results, .. blame,
+                .. coverage ? ["--collect", "Code Coverage;Format=cobertura"] : Array.Empty<string>(), .. arguments
+            ];
         var started = DateTime.Now;
         var (exitCode, output) = await Dotnet(command, ct, workingDirectory);
         if (hangTimeout is not null)

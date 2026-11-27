@@ -13,7 +13,7 @@ public class BuildingTestRunTests(McpServer server): IClassFixture<McpServer>
     public async Task TestRun_OfABuiltUnchangedProject_CompilesNothing()
     {
         string[] arguments = ["--filter", "FullyQualifiedName~RespondsWithCreated"];
-        var assembly = new FileInfo(Path.Combine(SourceDirectory, Fixture, "bin", "Debug", "net10.0", $"{Fixture}.dll"));
+        var assembly = new FileInfo(Path.Combine(SourceDirectory, Fixture, "bin", Configuration, "net10.0", $"{Fixture}.dll"));
         var built = assembly.LastWriteTimeUtc;
 
         await server.TestRun(Fixture, arguments, build: true);

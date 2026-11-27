@@ -13,7 +13,7 @@ internal static class KafkaGroups
         using (KafkaTracing.Source.StartActivity("Kafka ListConsumerGroups"))
             listing = await admin.ListConsumerGroupsAsync(new ListConsumerGroupsOptions { RequestTimeout = RequestTimeout });
         var active = listing.Valid
-            .Where(group => group.State is not (ConsumerGroupState.Empty or ConsumerGroupState.Dead))
+            .Where(group => group.State is not ConsumerGroupState.Empty)
             .Select(group => group.GroupId)
             .ToList();
         using (KafkaTracing.Source.StartActivity("Kafka DescribeConsumerGroups"))

@@ -568,7 +568,7 @@ In CI, run an OpenTelemetry Collector that writes the spans to a file, and uploa
 
 snippet: .github/otel-collector.yaml
 
-Download the file of a failed run with `gh run download <run id> --name spans`, and read it with the MCP server's `ogooreck_import_spans` tool.
+This repository uploads one artifact per target framework. Download the file of a failed run with `gh run download <run id> --name spans-net11.0`, and read it with the MCP server's `ogooreck_import_spans` tool.
 
 ## MCP server
 
@@ -610,7 +610,7 @@ The server sets `OTEL_EXPORTER_OTLP_ENDPOINT` for the test run and receives the 
 
 | Tool | What it does |
 |---|---|
-| `ogooreck_test_run` | Runs a test project, with extra arguments such as a filter. Returns the counts and each failed test with its message and the file and line of its When step. `repeat` runs it until the first failure, for a flaky test; `hangTimeout` aborts a hanging run and names the test and the spans that never ended. |
+| `ogooreck_test_run` | Runs a test project, VSTest or Microsoft.Testing.Platform, with extra arguments such as a filter or `--framework`. Returns the counts, the frameworks the tests ran on, the slowest tests, build errors, and each failed test with its message and the file and line of its When step. `repeat` runs it until the first failure, for a flaky test; `hangTimeout` aborts a hanging run and names the test and the spans that never ended; `coverage` names a library and returns its uncovered lines and partly covered branches, collected with Microsoft's code coverage. |
 | `ogooreck_test_spans` | The span tree of a test: Before, Given, When and Then with their catch-ups and expectations, and the app's spans under them. |
 | `ogooreck_scenario_diagram` | A Mermaid sequence diagram of a test's steps and the messages they caused, one per test process, so a test run on two frameworks gets two. |
 | `ogooreck_find_spans` | Searches the spans by name, error or attribute. |

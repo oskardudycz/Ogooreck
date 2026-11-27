@@ -59,7 +59,7 @@ internal static class Collector
 
     private static async Task RunTheFixture(Uri endpoint, CancellationToken ct)
     {
-        using var process = Process.Start(new ProcessStartInfo("dotnet", ["test", Fixture, "--no-build"])
+        using var process = Process.Start(new ProcessStartInfo("dotnet", ["test", Fixture, "--no-build", "--configuration", Configuration])
         {
             WorkingDirectory = SourceDirectory,
             RedirectStandardOutput = true,

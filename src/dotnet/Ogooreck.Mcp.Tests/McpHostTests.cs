@@ -22,6 +22,8 @@ public class McpHostTests(McpServer server): IClassFixture<McpServer>
         Assert.Contains("ogooreck_test_spans", instructions);
         Assert.Contains("ogooreck_concurrent_spans", instructions);
         Assert.Contains("ogooreck_import_spans", instructions);
+        Assert.Contains("ogooreck_export_spans", instructions);
+        Assert.Contains("pass coverage with the library name", instructions);
     }
 
     [Fact]

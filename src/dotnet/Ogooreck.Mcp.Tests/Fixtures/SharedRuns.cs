@@ -13,11 +13,15 @@ public sealed class SharedRuns: IAsyncDisposable
         runs.GetOrAdd(string.Join(' ', [project, .. arguments]),
             _ => new Lazy<Task<SharedRun>>(() => Started(project, arguments))).Value;
 
-    private static async Task<SharedRun> Started(string project, string[] arguments)
+    public Task<SharedRun> Covering(string library, string project, params string[] arguments) =>
+        runs.GetOrAdd(string.Join(' ', [$"coverage={library}", project, .. arguments]),
+            _ => new Lazy<Task<SharedRun>>(() => Started(project, arguments, library))).Value;
+
+    private static async Task<SharedRun> Started(string project, string[] arguments, string? coverage = null)
     {
         var server = new McpServer();
         await server.InitializeAsync();
-        return new SharedRun(server, await server.TestRun(project, arguments));
+        return new SharedRun(server, await server.TestRun(project, arguments, coverage: coverage));
     }
 
     public async ValueTask DisposeAsync()

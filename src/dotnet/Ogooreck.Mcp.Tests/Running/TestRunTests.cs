@@ -33,6 +33,45 @@ public class TestRunTests(McpServer server, SharedRuns runs): IClassFixture<McpS
         Assert.Empty(run.OutputTail);
         Assert.Empty(run.RunningWhenAborted);
         Assert.Empty(run.NeverEnded);
+        Assert.Null(run.Coverage);
+    }
+
+    [Fact]
+    public async Task TestRun_WithCoverage_ReturnsTheLinesAndBranchesOfTheLibraryThatNoTestRan()
+    {
+        var coverage = (await runs.Covering("Ogooreck.Sample.Api", Fixture, "--filter", "FullyQualifiedName~RespondsWithCreated")).Result.Coverage!;
+
+        Assert.Equal("Ogooreck.Sample.Api", coverage.Library);
+        Assert.InRange(coverage.Lines.Covered, 1, coverage.Lines.Valid - 1);
+        Assert.Equal(coverage.Lines.Valid - coverage.Lines.Covered, coverage.UncoveredLines.Sum(LineCount));
+        Assert.All(coverage.UncoveredLines, lines => Assert.Matches(@"^src/dotnet/Ogooreck\.Sample\.Api/.+\.cs:\d+(-\d+)?$", lines));
+        Assert.InRange(coverage.Branches.Covered, 0, coverage.Branches.Valid - 1);
+        Assert.NotEmpty(coverage.PartlyCoveredBranches);
+        Assert.All(coverage.PartlyCoveredBranches, branch => Assert.Matches(@"^src/dotnet/Ogooreck\.Sample\.Api/.+\.cs:\d+ \(\d+/\d+\)$", branch));
+    }
+
+    [Fact]
+    public async Task TestRun_WithCoverage_OfATestingPlatformProject_ReturnsTheCoverageOfTheLibrary()
+    {
+        var coverage = (await runs.Covering("Ogooreck", TestingPlatformProject, "--framework", "net11.0")).Result.Coverage!;
+
+        Assert.Equal("Ogooreck", coverage.Library);
+        Assert.InRange(coverage.Lines.Covered, 1, coverage.Lines.Valid - 1);
+    }
+
+    [Fact]
+    public async Task TestRun_WithCoverage_OfALibraryTheTestsNeverLoaded_HasNoLines()
+    {
+        var coverage = (await runs.Covering("Ogooreck.Missing", Fixture, "--no-such-option")).Result.Coverage!;
+
+        Assert.Equal(new CoverageCounts(0, 0), coverage.Lines);
+        Assert.Empty(coverage.UncoveredLines);
+    }
+
+    private static int LineCount(string lines)
+    {
+        var range = lines[(lines.LastIndexOf(':') + 1)..].Split('-').Select(int.Parse).ToArray();
+        return range[^1] - range[0] + 1;
     }
 
     [Fact]
