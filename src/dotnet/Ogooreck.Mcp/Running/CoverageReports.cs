@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
@@ -6,7 +7,7 @@ namespace Ogooreck.Mcp;
 
 internal static partial class CoverageReports
 {
-    public static Coverage Read(string results, string library, SourceFiles sources)
+    public static Coverage Read(string results, string library, string? files, int top, CoverageSort sort, SourceFiles sources)
     {
         var lines = Directory.EnumerateFiles(results, "*.cobertura.xml", SearchOption.AllDirectories)
             .SelectMany(report => XDocument.Load(report).Descendants("package"))
@@ -15,6 +16,7 @@ internal static partial class CoverageReports
             .SelectMany(type => type.Elements("lines").Elements("line")
                 .Select(line => (File: sources.Relative(type.Attribute("filename")!.Value), Line: line)))
             .Where(entry => !entry.File.Contains("/obj/", StringComparison.Ordinal))
+            .Where(entry => entry.File.Contains(files ?? "", StringComparison.Ordinal))
             .GroupBy(entry => (entry.File, Number: Number(entry.Line, "number")))
             .Select(group => new CoveredLine(group.Key.File, group.Key.Number,
                 group.Max(entry => Number(entry.Line, "hits")) > 0,
@@ -22,25 +24,31 @@ internal static partial class CoverageReports
             .OrderBy(line => line.File, StringComparer.Ordinal).ThenBy(line => line.Number)
             .ToArray();
 
+        var uncovered = lines.Where(line => !line.Hit).GroupBy(line => line.File).ToArray();
+        var partlyCovered = lines.Where(line => line.Branches.Covered < line.Branches.Valid).GroupBy(line => line.File).ToArray();
         return new Coverage(library,
             new CoverageCounts(lines.Count(line => line.Hit), lines.Length),
             new CoverageCounts(lines.Sum(line => line.Branches.Covered), lines.Sum(line => line.Branches.Valid)),
-            UncoveredRanges(lines),
-            lines.Where(line => line.Branches.Covered < line.Branches.Valid)
-                .Select(line => $"{line.File}:{line.Number} ({line.Branches.Covered}/{line.Branches.Valid})").ToArray());
+            Listed(uncovered, top, sort, file => $"{file.Key}: {string.Join(", ", Ranges(file))}"),
+            uncovered.Length,
+            Listed(partlyCovered, top, sort, file => $"{file.Key}: {string.Join(", ", file.Select(line => $"{line.Number} ({line.Branches.Covered}/{line.Branches.Valid})"))}"),
+            partlyCovered.Length);
     }
 
-    private static string[] UncoveredRanges(CoveredLine[] lines)
+    private static string[] Listed(IGrouping<string, CoveredLine>[] files, int top, CoverageSort sort,
+        Func<IGrouping<string, CoveredLine>, string> describe) =>
+        files.OrderByDescending(file => sort == CoverageSort.Uncovered ? file.Count() : 0).ThenBy(file => file.Key, StringComparer.Ordinal)
+            .Take(top).Select(describe).ToArray();
+
+    private static IEnumerable<string> Ranges(IEnumerable<CoveredLine> lines)
     {
-        var ranges = new List<(string File, int First, int Last)>();
-        foreach (var line in lines.Where(line => !line.Hit))
-            if (ranges.Count > 0 && ranges[^1].File == line.File && ranges[^1].Last == line.Number - 1)
+        var ranges = new List<(int First, int Last)>();
+        foreach (var line in lines)
+            if (ranges.Count > 0 && ranges[^1].Last == line.Number - 1)
                 ranges[^1] = ranges[^1] with { Last = line.Number };
             else
-                ranges.Add((line.File, line.Number, line.Number));
-        return ranges.Select(range => range.First == range.Last
-            ? $"{range.File}:{range.First}"
-            : $"{range.File}:{range.First}-{range.Last}").ToArray();
+                ranges.Add((line.Number, line.Number));
+        return ranges.Select(range => range.First == range.Last ? $"{range.First}" : $"{range.First}-{range.Last}");
     }
 
     private static int Number(XElement line, string attribute) =>
@@ -62,6 +70,13 @@ internal static partial class CoverageReports
 }
 
 public sealed record Coverage(string Library, CoverageCounts Lines, CoverageCounts Branches, string[] UncoveredLines,
-    string[] PartlyCoveredBranches);
+    int UncoveredFiles, string[] PartlyCoveredBranches, int PartlyCoveredFiles);
 
 public sealed record CoverageCounts(int Covered, int Valid);
+
+[JsonConverter(typeof(JsonStringEnumConverter<CoverageSort>))]
+public enum CoverageSort
+{
+    Uncovered,
+    File
+}

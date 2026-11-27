@@ -1,0 +1,5 @@
+<Project>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="STARTUP_HOOKS" Value="Ogooreck" />
+  </ItemGroup>
+</Project>

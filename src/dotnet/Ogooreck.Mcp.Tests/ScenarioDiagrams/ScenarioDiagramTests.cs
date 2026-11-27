@@ -59,11 +59,11 @@ public class ScenarioDiagramTests(SharedRuns runs)
     [Fact]
     public async Task ScenarioDiagram_OfATestWithoutAnOgooreckRun_IsAnError()
     {
-        var server = (await runs.Of(Fixture, "--filter", "FullyQualifiedName~WritingSpansOfItsOwn")).Server;
+        var server = (await runs.Of(Fixture)).Server;
 
-        var result = await server.Call("ogooreck_scenario_diagram", new() { ["test"] = "WritingSpansOfItsOwn" });
+        var result = await server.Call("ogooreck_scenario_diagram", new() { ["test"] = "RegisteringAProduct_WithoutAName" });
 
         Assert.True(result.IsError);
-        Assert.Contains("No Ogooreck run of WritingSpansOfItsOwn in the last ogooreck_test_run.", Text(result));
+        Assert.Contains("No Ogooreck run of RegisteringAProduct_WithoutAName in the last ogooreck_test_run.", Text(result));
     }
 }

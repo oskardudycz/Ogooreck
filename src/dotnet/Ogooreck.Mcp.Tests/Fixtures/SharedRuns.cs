@@ -14,14 +14,18 @@ public sealed class SharedRuns: IAsyncDisposable
             _ => new Lazy<Task<SharedRun>>(() => Started(project, arguments))).Value;
 
     public Task<SharedRun> Covering(string library, string project, params string[] arguments) =>
-        runs.GetOrAdd(string.Join(' ', [$"coverage={library}", project, .. arguments]),
-            _ => new Lazy<Task<SharedRun>>(() => Started(project, arguments, library))).Value;
+        Covering(new CoverageScope(library), project, arguments);
 
-    private static async Task<SharedRun> Started(string project, string[] arguments, string? coverage = null)
+    public Task<SharedRun> Covering(CoverageScope scope, string project, params string[] arguments) =>
+        runs.GetOrAdd(string.Join(' ', [$"{scope}", project, .. arguments]),
+            _ => new Lazy<Task<SharedRun>>(() => Started(project, arguments, scope))).Value;
+
+    private static async Task<SharedRun> Started(string project, string[] arguments, CoverageScope? coverage = null)
     {
         var server = new McpServer();
         await server.InitializeAsync();
-        return new SharedRun(server, await server.TestRun(project, arguments, coverage: coverage));
+        return new SharedRun(server, await server.TestRun(project, arguments, coverage: coverage?.Library,
+            coverageFiles: coverage?.Files, coverageTop: coverage?.Top ?? 25, coverageSort: coverage?.Sort ?? "uncovered"));
     }
 
     public async ValueTask DisposeAsync()
@@ -32,3 +36,5 @@ public sealed class SharedRuns: IAsyncDisposable
 }
 
 public sealed record SharedRun(McpServer Server, TestRunResult Result);
+
+public sealed record CoverageScope(string Library, string? Files = null, int Top = 25, string Sort = "uncovered");

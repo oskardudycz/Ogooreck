@@ -44,10 +44,12 @@ public class TestRunTests(McpServer server, SharedRuns runs): IClassFixture<McpS
         Assert.Equal("Ogooreck.Sample.Api", coverage.Library);
         Assert.InRange(coverage.Lines.Covered, 1, coverage.Lines.Valid - 1);
         Assert.Equal(coverage.Lines.Valid - coverage.Lines.Covered, coverage.UncoveredLines.Sum(LineCount));
-        Assert.All(coverage.UncoveredLines, lines => Assert.Matches(@"^src/dotnet/Ogooreck\.Sample\.Api/.+\.cs:\d+(-\d+)?$", lines));
+        Assert.All(coverage.UncoveredLines, lines => Assert.Matches(@"^src/dotnet/Ogooreck\.Sample\.Api/.+\.cs: \d+(-\d+)?(, \d+(-\d+)?)*$", lines));
+        Assert.Equal(coverage.UncoveredLines.Length, coverage.UncoveredFiles);
         Assert.InRange(coverage.Branches.Covered, 0, coverage.Branches.Valid - 1);
         Assert.NotEmpty(coverage.PartlyCoveredBranches);
-        Assert.All(coverage.PartlyCoveredBranches, branch => Assert.Matches(@"^src/dotnet/Ogooreck\.Sample\.Api/.+\.cs:\d+ \(\d+/\d+\)$", branch));
+        Assert.All(coverage.PartlyCoveredBranches, branches => Assert.Matches(@"^src/dotnet/Ogooreck\.Sample\.Api/.+\.cs: \d+ \(\d+/\d+\)(, \d+ \(\d+/\d+\))*$", branches));
+        Assert.Equal(coverage.PartlyCoveredBranches.Length, coverage.PartlyCoveredFiles);
     }
 
     [Fact]
@@ -57,6 +59,27 @@ public class TestRunTests(McpServer server, SharedRuns runs): IClassFixture<McpS
 
         Assert.Equal("Ogooreck", coverage.Library);
         Assert.InRange(coverage.Lines.Covered, 1, coverage.Lines.Valid - 1);
+        Assert.Equal(25, coverage.UncoveredLines.Length);
+        Assert.True(coverage.UncoveredFiles > 25);
+        var counts = coverage.UncoveredLines.Select(LineCount).ToArray();
+        Assert.Equal(counts.OrderDescending(), counts);
+        Assert.True(coverage.PartlyCoveredBranches.Length <= 25);
+    }
+
+    [Fact]
+    public async Task TestRun_WithCoverageOfSomeFiles_SortedByFile_CountsAndListsOnlyThoseFiles_UpToTheTop()
+    {
+        var whole = (await runs.Covering("Ogooreck", TestingPlatformProject, "--framework", "net11.0")).Result.Coverage!;
+        var coverage = (await runs.Covering(new CoverageScope("Ogooreck", "src/dotnet/Ogooreck/API/Telemetry/", 2, "file"),
+            TestingPlatformProject, "--framework", "net11.0")).Result.Coverage!;
+
+        Assert.InRange(coverage.Lines.Valid, 1, whole.Lines.Valid - 1);
+        Assert.Equal(2, coverage.UncoveredLines.Length);
+        Assert.InRange(coverage.UncoveredFiles, 3, whole.UncoveredFiles - 1);
+        Assert.All(coverage.UncoveredLines.Concat(coverage.PartlyCoveredBranches),
+            file => Assert.StartsWith("src/dotnet/Ogooreck/API/Telemetry/", file));
+        Assert.True(coverage.PartlyCoveredBranches.Length <= 2);
+        Assert.Equal(coverage.UncoveredLines.Order(StringComparer.Ordinal), coverage.UncoveredLines);
     }
 
     [Fact]
@@ -68,11 +91,12 @@ public class TestRunTests(McpServer server, SharedRuns runs): IClassFixture<McpS
         Assert.Empty(coverage.UncoveredLines);
     }
 
-    private static int LineCount(string lines)
-    {
-        var range = lines[(lines.LastIndexOf(':') + 1)..].Split('-').Select(int.Parse).ToArray();
-        return range[^1] - range[0] + 1;
-    }
+    private static int LineCount(string lines) =>
+        lines[(lines.LastIndexOf(':') + 1)..].Split(',').Sum(range =>
+        {
+            var numbers = range.Split('-').Select(int.Parse).ToArray();
+            return numbers[^1] - numbers[0] + 1;
+        });
 
     [Fact]
     public async Task TestRun_CollectsTheSpansOfTheTestsWithoutTheSpansOfTheDotnetCli()

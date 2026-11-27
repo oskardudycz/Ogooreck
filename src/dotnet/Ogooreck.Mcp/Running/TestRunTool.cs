@@ -14,13 +14,16 @@ public sealed partial class TestRunTool(CollectedSpans collected, TestRunner run
 
     [McpServerTool(Name = "ogooreck_test_run", Title = "Run tests", ReadOnly = false, Destructive = false, OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Runs the tests of a .NET test project and collects the spans of the tests, Ogooreck and the tested app. Returns the test counts, the target frameworks the tests ran on, the code coverage of a library when asked, and each failed test with its message and the source location of its Ogooreck runs. Every project runs with dotnet test; a Microsoft.Testing.Platform project in dotnet test's Microsoft.Testing.Platform mode, opted into for this run only, without changing the repository's global.json. As with dotnet test, a project with several target frameworks runs on each of them unless --framework picks one. Each test that ran also gets a span, named after the test, timed from the test results and with its target framework in test.framework, so ogooreck_concurrent_spans shows what ran during any test, also one that doesn't use Ogooreck. Then call ogooreck_test_spans, ogooreck_find_spans, ogooreck_concurrent_spans, ogooreck_slowest_steps or ogooreck_export_spans. The run sets OTEL_EXPORTER_OTLP_ENDPOINT, which turns on the test project's tracing, and that tracing may listen to every ActivitySource. Code that behaves differently when its ActivitySource has a listener can then pass here and fail in a plain dotnet test, so if a test passes here but fails in CI, run it with plain dotnet test too.")]
+    [Description("Runs the tests of a .NET test project and collects the spans of the tests, Ogooreck and the tested app. Returns the test counts, the target frameworks the tests ran on, the code coverage of a library when asked, and each failed test with its message and the source location of its Ogooreck runs. Every project runs with dotnet test; a Microsoft.Testing.Platform project in dotnet test's Microsoft.Testing.Platform mode, opted into for this run only, without changing the repository's global.json. As with dotnet test, a project with several target frameworks runs on each of them unless --framework picks one. Each test that ran also gets a span, named after the test, timed from the test results and with its target framework in test.framework, so ogooreck_concurrent_spans shows what ran during any test, also one that doesn't use Ogooreck. Then call ogooreck_test_spans, ogooreck_find_spans, ogooreck_concurrent_spans, ogooreck_slowest_steps or ogooreck_export_spans. The run sets OTEL_EXPORTER_OTLP_ENDPOINT, which makes Ogooreck in the test project export its spans and listen to every ActivitySource. Code that behaves differently when its ActivitySource has a listener can then pass here and fail in a plain dotnet test, so if a test passes here but fails in CI, run it with plain dotnet test too.")]
     public async Task<TestRunResult> TestRun(
         [Description("Path to the test project (.csproj or .fsproj) or its folder, relative to the working directory.")] string project,
         [Description("Extra arguments for dotnet test, passed as given, for example [\"--framework\", \"net11.0\", \"--filter\", \"FullyQualifiedName~CartTests\"] for a VSTest project, or [\"--framework\", \"net11.0\", \"--treenode-filter\", \"/*/*/CartTests/*\"] for a Microsoft.Testing.Platform project. Run only the tests you need. Pass \"--no-build\" when the project is already built and unchanged, to skip its build and restore.")] string[]? arguments = null,
         [Description("How many times to run the tests at most. The runs stop at the first one that has a failed test or ends with an error, and its spans are kept. Use it to catch a flaky test.")] int repeat = 1,
         [Description("Seconds that a test may run before the run is aborted, for a VSTest project. The result then names the tests that were running and the Ogooreck spans whose parent never ended. Use it when a test hangs.")] int? hangTimeout = null,
-        [Description("Name of a library assembly, for example \"Ogooreck\", to collect its code coverage with Microsoft's collector: Microsoft.NET.Test.Sdk brings it to a VSTest project, Microsoft.Testing.Extensions.CodeCoverage to a Microsoft.Testing.Platform project. The result then has the covered and valid lines and branches, each uncovered line or range of lines, and each line with partly covered branches, leaving out the code generated under obj/, as the build's coverage check does. Lines.Valid is 0 when the tests never loaded the library. Use it to find the code that no test reaches.")] string? coverage = null,
+        [Description("Name of a library assembly, for example \"Ogooreck\", to collect its code coverage with Microsoft's collector: Microsoft.NET.Test.Sdk brings it to a VSTest project, Microsoft.Testing.Extensions.CodeCoverage to a Microsoft.Testing.Platform project. The result then has the covered and valid lines and branches, the uncovered lines of each file as ranges, and the lines with partly covered branches of each file, listing at most coverageTop files, in the order coverageSort sets, with the number of all such files in UncoveredFiles and PartlyCoveredFiles, leaving out the code generated under obj/, as the build's coverage check does. Lines.Valid is 0 when the tests never loaded the library. Use it to find the code that no test reaches.")] string? coverage = null,
+        [Description("Text that the repository path of a file must contain for coverage to count and list it, for example \"src/dotnet/Ogooreck/API/Telemetry/\". Use it to see the coverage of one folder or file.")] string? coverageFiles = null,
+        [Description("How many files coverage lists at most, in UncoveredLines and in PartlyCoveredBranches.")] int coverageTop = 25,
+        [Description("How coverage orders the files it lists: \"uncovered\" puts the files with the most uncovered lines, or the most lines with partly covered branches, first; \"file\" orders them by path.")] CoverageSort coverageSort = CoverageSort.Uncovered,
         CancellationToken ct = default)
     {
         var path = Path.GetFullPath(project);
@@ -31,7 +34,7 @@ public sealed partial class TestRunTool(CollectedSpans collected, TestRunner run
 
         for (var attempt = 1; ; attempt++)
         {
-            var result = await RunOnce(path, arguments ?? [], hangTimeout, coverage, attempt, ct);
+            var result = await RunOnce(path, arguments ?? [], hangTimeout, coverage, coverageFiles, coverageTop, coverageSort, attempt, ct);
             if (result.FailedTests.Length == 0 && result.ExitCode == 0 && attempt < repeat)
                 continue;
 
@@ -45,7 +48,7 @@ public sealed partial class TestRunTool(CollectedSpans collected, TestRunner run
     }
 
     private async Task<TestRunResult> RunOnce(string path, string[] arguments, int? hangTimeout, string? coverage,
-        int attempt, CancellationToken ct)
+        string? coverageFiles, int coverageTop, CoverageSort coverageSort, int attempt, CancellationToken ct)
     {
         collected.Replace([]);
         var results = Directory.CreateTempSubdirectory("ogooreck-mcp-");
@@ -84,7 +87,7 @@ public sealed partial class TestRunTool(CollectedSpans collected, TestRunner run
                     .Select(children => new NeverEndedSpan(children.First().TraceId, children.Key,
                         children.Select(child => child.Name).ToArray()))
                     .ToArray(),
-                coverage is null ? null : CoverageReports.Read(results.FullName, coverage, sources));
+                coverage is null ? null : CoverageReports.Read(results.FullName, coverage, coverageFiles, coverageTop, coverageSort, sources));
         }
         finally
         {

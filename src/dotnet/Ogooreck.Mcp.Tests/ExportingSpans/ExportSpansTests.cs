@@ -21,6 +21,17 @@ public class ExportSpansTests(SharedRuns runs)
     }
 
     [Fact]
+    public async Task ExportSpans_OfAnAppThatExportsItsOwnSpans_HasEachSpanOnce()
+    {
+        var server = (await runs.Of(Fixture)).Server;
+
+        var spans = await server.TestRunSpans();
+
+        Assert.Contains(spans, span => span.Name == "POST /api/products/");
+        Assert.Empty(spans.GroupBy(span => (span.TraceId, span.SpanId)).Where(same => same.Count() > 1).Select(same => same.First().Name));
+    }
+
+    [Fact]
     public async Task ExportSpans_WriteArrayAttributesAsArrays()
     {
         var server = (await runs.Of(Fixture, "--filter", "FullyQualifiedName~WritingSpansOfItsOwn")).Server;

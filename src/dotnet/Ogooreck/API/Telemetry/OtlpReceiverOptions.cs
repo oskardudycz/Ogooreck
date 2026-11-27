@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+
 namespace Ogooreck.API;
 
 /// <summary>Options for <see cref="OtlpReceiver.Start(OtlpReceiverOptions)"/>.</summary>
@@ -28,13 +30,14 @@ public sealed class OtlpReceiverOptions
     public string? ServiceName { get; init; }
 
     /// <summary>
-    /// Another OTLP/HTTP endpoint that the receiver sends every export to after recording it, for example the collector of a test run from <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>,
-    /// so the app's spans show up next to the test's. An export the endpoint can't take is dropped, as an OpenTelemetry exporter drops it, and never fails the app's export.
+    /// Another OTLP/HTTP endpoint that the receiver sends every export to after recording it, so the app's spans show up next to the test's.
+    /// By default it's the endpoint the tests export to: <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>, when <c>OTEL_EXPORTER_OTLP_PROTOCOL</c> is <c>http/protobuf</c> and Ogooreck's export isn't turned off, so the app's spans reach the same backend or the MCP server with no setup.
+    /// Set it to <c>null</c> to forward nothing. An export the endpoint can't take is dropped, as an OpenTelemetry exporter drops it, and never fails the app's export.
     /// </summary>
     /// <example>
     /// <code>
-    /// var otlp = OtlpReceiver.Start(new OtlpReceiverOptions { ForwardTo = new Uri(Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")!) });
+    /// var otlp = OtlpReceiver.Start(new OtlpReceiverOptions { ForwardTo = null });
     /// </code>
     /// </example>
-    public Uri? ForwardTo { get; init; }
+    public Uri? ForwardTo { get; init; } = OtlpExport.ForwardTo(new ConfigurationBuilder().AddEnvironmentVariables().Build());
 }

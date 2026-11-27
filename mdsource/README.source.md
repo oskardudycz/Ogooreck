@@ -313,7 +313,7 @@ A test never sleeps. After each step, Ogooreck waits until the app has caught up
 
 | Package | What it adds |
 |---|---|
-| [Ogooreck](https://www.nuget.org/packages/Ogooreck/) | `ApiSpecification`: steps, response expectations, traces and metrics, in process or over OTLP. Also the business logic specifications. |
+| [Ogooreck](https://www.nuget.org/packages/Ogooreck/) | `ApiSpecification`: steps, response expectations, traces and metrics, in process or over OTLP. Also the business logic specifications, and the [export of the test process's spans](#exporting-the-traces-of-tests) over OTLP. |
 | [Ogooreck.Wolverine](https://www.nuget.org/packages/Ogooreck.Wolverine/) | `WolverinePlugin`: records what the app publishes through Wolverine and waits through Wolverine's tracked sessions. |
 | [Ogooreck.Marten](https://www.nuget.org/packages/Ogooreck.Marten/) | `MartenPlugin`: records the events the app appends and waits for its async projections. |
 | [Ogooreck.Kafka](https://www.nuget.org/packages/Ogooreck.Kafka/) | `KafkaPlugin.Decorating()`: records what the app produces and waits until its consumers have read it. `KafkaPlugin.Consuming(...)`: records the messages of an app running out of process. |
@@ -410,6 +410,12 @@ Ogooreck records what the app publishes and appends through decorators on the ap
 
 After each step, Ogooreck runs the plugins' catch-up until a round finds nothing new. So the When step's messages are all there when the expectations run, and the next step sees what the app's consumers did, with no waiting in the test.
 
+What you set up is small, and the same for each plugin:
+
+- **You add** one plugin field, listing your message types so the recorder can turn the type header into your types, and `spec.Use(plugin)` in the specification.
+- **Ogooreck does the rest**: it decorates the producers, consumers or connections the app registers in DI, records what the app publishes, reads the [recommended headers](#message-headers) and waits for the consumers after each step. The app needs no change.
+- **The specifications below are examples**: the settings they pass, such as `Kafka:Topic` or `RabbitMQ:ShippingQueue`, are the sample app's own configuration keys, and the broker comes from this repository's Testcontainers fixture. Point your app at your broker the way your app reads its settings.
+
 #### Wolverine
 
 snippet: WolverinePlugin
@@ -436,9 +442,11 @@ snippet: MartenProjectionCatchUp
 
 #### Kafka
 
+You add the plugin. `Decorating()` wraps the app's `IProducer` and `IConsumer` registrations, so nothing else is needed:
+
 snippet: KafkaPlugin
 
-The specification points the app at the broker and gives it its own topic and consumer group. A low `fetch.wait.max.ms` makes the app's consumers answer catch-up fast:
+The specification points the sample app at the test broker through the app's own settings. One of them is worth copying into your tests: a low `fetch.wait.max.ms` on the app's consumers. Catch-up waits until each consumer is back in `Consume`, and a poll can wait that long for new data, so a low value makes each step end sooner:
 
 snippet: KafkaShopApi
 
@@ -448,9 +456,11 @@ snippet: KafkaCatchUp
 
 #### RabbitMQ
 
+You add the plugin. `Decorating()` wraps the app's `IConnection`, so nothing else is needed:
+
 snippet: RabbitMQPlugin
 
-The specification points the app at the broker and gives it its own exchange and queue:
+The specification points the sample app at the test broker, its exchange and its queue through the app's own settings. Your app needs only its usual connection settings:
 
 snippet: RabbitMQShopApi
 
@@ -468,7 +478,9 @@ snippet: RabbitMQCatchUp
 | `RabbitMQPlugin.Decorating()` | A probe message sent to each queue the app consumes has come back, and no handler is running or requeued. |
 | `KafkaPlugin.Consuming(...)` | Never: it reads the topics from the test, for an app out of process. `ExpectPublished` then passes as soon as the expected messages arrive, in that order with others between them, and `ExpectNothingPublished` fails at once, saying it needs a catch-up. |
 
-The plugins wait only for the consumers that the app gets from DI. Ogooreck creates no topics, queues or exchanges: the app or its AppHost creates them, or, as in these tests, the broker fixture. Each copy of the app runs its own consumers, so two copies in one Kafka group or on one RabbitMQ queue split the messages. Give each copy its own group or queue names, as the specifications above do, or run one app per test project through an assembly fixture.
+The plugins wait only for the consumers that the app gets from DI. Ogooreck creates no topics, queues or exchanges: the app or its AppHost creates them, or, as in these tests, the broker fixture.
+
+**When the tests start the app more than once.** If your app consumes no messages, or a test run starts it once, skip this. Each specification starts its own copy of the app, so a class fixture used by three test classes starts three copies. Each copy runs its own consumers. When two copies read the same Kafka consumer group or the same RabbitMQ queue, the broker gives each message to only one of them, so a test can wait for a message the other copy handled. Give each copy its own group or queue name through the app's settings, for example `.UseSetting("Kafka:ShippingGroupId", $"shop-shipping-{Guid.NewGuid():N}")`, and make sure whatever creates your queues creates that name too. The Marten specification above does the same for data, with a new schema for each copy. The Kafka and RabbitMQ samples start the app once, so they keep fixed names.
 
 A consumer the plugin can't wait for, such as a loop that hands messages to other tasks, needs your own catch-up: `CatchUp(ct => ...)` runs after each step, and `CatchUp((step, ct) => ...)` wraps it. Give it to one test with `api.With(spec => spec.CatchUp(...))`, which runs on the same app with the test setup changed.
 
@@ -536,7 +548,7 @@ For another messaging tool, decorate the app's own service with `services.Decora
 
 ### Apps out of process (Aspire)
 
-An app that runs in another process exports its telemetry over OTLP. `OtlpReceiver` is an OTLP/HTTP endpoint in the test: start it first and pass its `Endpoint` to the app. `ForwardTo` sends every export on to another collector, so the app's spans also show up next to the test's:
+An app that runs in another process exports its telemetry over OTLP. `OtlpReceiver` is an OTLP/HTTP endpoint in the test: start it first and pass its `Endpoint` to the app. It passes everything it receives on to the endpoint the tests export to, so the app's spans also show up next to the test's:
 
 snippet: AspireSpecification
 
@@ -558,11 +570,32 @@ snippet: FSharpApiTest
 
 Ogooreck traces each test with the `Ogooreck` `ActivitySource`: a `Ogooreck Given/When/Then` span with the test's method, file and line, and below it `Before` (starting the app and its plugins), each step with its catch-up, and `Then` with each expectation. Each step's span carries the trace id of the requests it sent, so you can follow the step into the app's spans. The `Ogooreck` meter records how long runs, app starts, steps, catch-ups and expectations take.
 
-To see those spans next to the app's, export them from the test project with OpenTelemetry to any OTLP backend, such as the Aspire dashboard, Jaeger or an OpenTelemetry Collector. This repository's test projects start the export only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set:
+### Tests with the app in process
 
-snippet: TestTelemetryExport
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` when you run the tests, and Ogooreck sends the spans of the test process there: the steps, the requests they send, and the spans of an app started with `For<Program>()`, along with the `Ogooreck` meter. Any OTLP backend works, such as the Aspire dashboard, Jaeger or an OpenTelemetry Collector. You add no code and no package:
 
-Use the Batch processor, as above. With the Simple processor, the exporter sends spans in the flow of the test, so its own HTTP calls to the endpoint show up under the test's spans.
+```shell
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 dotnet test
+```
+
+The service is named after the test project unless `OTEL_SERVICE_NAME` is set. Ogooreck reads the other standard variables too, such as `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_HEADERS`, and the separate `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`. The [MCP server](#mcp-server) sets the endpoint for you.
+
+What Ogooreck does behind that:
+
+- It starts sending when the test process starts, before the first test, so a test that doesn't use Ogooreck has its spans sent too. The package adds a [startup hook](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) to the test project's runtime settings for that.
+- It sends spans every 50 ms and metrics every second, so a test that hangs still leaves its spans behind. `OTEL_BSP_SCHEDULE_DELAY` and `OTEL_METRIC_EXPORT_INTERVAL` change that.
+- An app started with `For<Program>()` runs in the test process, so Ogooreck already sends its spans. If the app also exports them through its own OpenTelemetry setup, each span would arrive twice, so Ogooreck starts the app with `OTEL_SDK_DISABLED=true`. That turns off all of the app's own OpenTelemetry setup during the tests. If a test checks what that setup collects, set `OGOORECK_OTLP_EXPORT=false`: Ogooreck then sends nothing, and the app's setup stays on.
+- While it sends, Ogooreck listens to every `ActivitySource`. Code that behaves differently when its `ActivitySource` has a listener can pass with the export on and fail without it.
+
+### Apps in their own process
+
+When Aspire starts the app, the app runs in its own process and sends its own spans. They still belong to the test: Ogooreck sends a `traceparent` header with each request, so the app's spans carry the step's trace id and sit under the step that sent the request. They only need to reach the same place as the test's spans:
+
+1. Start an `OtlpReceiver` in the test, as in [Apps out of process](#apps-out-of-process-aspire). `ExpectTrace` and `ExpectMetric` read the app's spans from it, and it passes them on to the endpoint the tests export to, when that endpoint takes OTLP over HTTP (`OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`), as the MCP server's does.
+2. In the AppHost, give the app the receiver's `Endpoint` as `OTEL_EXPORTER_OTLP_ENDPOINT`, and `http/protobuf` as `OTEL_EXPORTER_OTLP_PROTOCOL`. Without it, Aspire sends the app's spans to its dashboard, and neither the tests nor the MCP server see them.
+3. Give the app its own OpenTelemetry export, such as the one in Aspire's ServiceDefaults.
+
+### In CI
 
 In CI, run an OpenTelemetry Collector that writes the spans to a file, and upload the file when a run fails. This repository's .NET workflow does that with this config:
 
@@ -606,11 +639,11 @@ And for OpenCode in `opencode.json`:
 }
 ```
 
-The server sets `OTEL_EXPORTER_OTLP_ENDPOINT` for the test run and receives the spans, so the test project needs an export like the [one above](#exporting-the-traces-of-tests). Its tools:
+The server sets `OTEL_EXPORTER_OTLP_ENDPOINT` for the test run and receives the spans, which Ogooreck [exports by itself](#tests-with-the-app-in-process), so a test project with the app in process needs no setup. An app in its own process needs its export pointed at the tests, as [described above](#apps-in-their-own-process). Its tools:
 
 | Tool | What it does |
 |---|---|
-| `ogooreck_test_run` | Runs a test project, VSTest or Microsoft.Testing.Platform, with extra arguments such as a filter or `--framework`. Returns the counts, the frameworks the tests ran on, the slowest tests, build errors, and each failed test with its message and the file and line of its When step. `repeat` runs it until the first failure, for a flaky test; `hangTimeout` aborts a hanging run and names the test and the spans that never ended; `coverage` names a library and returns its uncovered lines and partly covered branches, collected with Microsoft's code coverage. |
+| `ogooreck_test_run` | Runs a test project, VSTest or Microsoft.Testing.Platform, with extra arguments such as a filter or `--framework`. Returns the counts, the frameworks the tests ran on, the slowest tests, build errors, and each failed test with its message and the file and line of its When step. `repeat` runs it until the first failure, for a flaky test; `hangTimeout` aborts a hanging run and names the test and the spans that never ended; `coverage` names a library and returns its uncovered lines and partly covered branches per file, collected with Microsoft's code coverage; `coverageFiles`, `coverageTop` and `coverageSort` pick which files it lists and in what order. |
 | `ogooreck_test_spans` | The span tree of a test: Before, Given, When and Then with their catch-ups and expectations, and the app's spans under them. |
 | `ogooreck_scenario_diagram` | A Mermaid sequence diagram of a test's steps and the messages they caused, one per test process, so a test run on two frameworks gets two. |
 | `ogooreck_find_spans` | Searches the spans by name, error or attribute. |
@@ -637,4 +670,3 @@ Special thanks go to:
 - Simon Cropp for [MarkdownSnippets](https://github.com/SimonCropp/MarkdownSnippets) that I'm using for plugging snippets to markdown,
 - Adam Ralph for [BullsEye](https://github.com/adamralph/bullseye), which I'm using to make the build process seamless,
 - [Babu Annamalai](https://mysticmind.dev/) that did a similar build setup in [Marten](https://martendb.io/) which I inspired a lot,
-- Dennis Doomen for [Fluent Assertions](https://fluentassertions.com/), which I'm using for internal assertions, especially checking the response body.

@@ -31,11 +31,14 @@
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
         <PackageReference Include="Google.Protobuf" Version="3.36.2" />
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
+        <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
         <InternalsVisibleTo Include="Ogooreck.Tests" />
     </ItemGroup>
 
     <ItemGroup>
         <None Include="$(RepositoryRoot)README.md" Pack="true" PackagePath="\" />
+        <None Include="buildTransitive/Ogooreck.props" Pack="true" PackagePath="buildTransitive/" />
         <None Remove="skills/**" />
     </ItemGroup>
 

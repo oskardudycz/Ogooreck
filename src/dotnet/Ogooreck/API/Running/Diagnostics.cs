@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using Microsoft.Extensions.Configuration;
 
 namespace Ogooreck.API;
 
@@ -28,11 +29,15 @@ internal sealed class Diagnostics: IDisposable
     private readonly long started = Stopwatch.GetTimestamp();
     private TagList tags;
 
-    static Diagnostics() => ActivitySource.AddActivityListener(new ActivityListener
+    static Diagnostics()
     {
-        ShouldListenTo = source => source == Source,
-        Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData
-    });
+        ActivitySource.AddActivityListener(new ActivityListener
+        {
+            ShouldListenTo = source => source == Source,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData
+        });
+        OtlpExport.Start(new ConfigurationBuilder().AddEnvironmentVariables().Build(), exit => AppDomain.CurrentDomain.ProcessExit += exit);
+    }
 
     private Diagnostics(Activity activity, Histogram<double>? duration, TagList tags)
     {

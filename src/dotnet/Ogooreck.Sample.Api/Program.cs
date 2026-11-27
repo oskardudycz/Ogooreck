@@ -3,11 +3,18 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
+using OpenTelemetry;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddEndpointsApiExplorer();
+
+if (!string.IsNullOrEmpty(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+    builder.Services.AddOpenTelemetry()
+        .WithTracing(tracing => tracing.AddSource("Microsoft.AspNetCore", "Ogooreck.Sample.Api"))
+        .UseOtlpExporter();
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(Channel.CreateUnbounded<string>());

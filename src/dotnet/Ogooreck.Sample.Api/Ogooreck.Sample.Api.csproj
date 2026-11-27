@@ -5,6 +5,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
       <ProjectReference Include="..\Ogooreck\Ogooreck.csproj" />
     </ItemGroup>
 </Project>

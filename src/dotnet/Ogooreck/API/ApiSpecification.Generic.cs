@@ -1,6 +1,8 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 
 namespace Ogooreck.API;
 
@@ -384,7 +386,8 @@ public class ApiSpecification<TProgram>: IDisposable, IAsyncDisposable where TPr
     private StartedHost Start()
     {
         settings.Start();
-        factory = customise(defaultFactory);
+        factory = customise(defaultFactory.WithWebHostBuilder(builder => builder.UseSetting("OTEL_SDK_DISABLED",
+            OtlpExport.AppSdkDisabled(new ConfigurationBuilder().AddEnvironmentVariables().Build()))));
         if (settings.Services.Items.Length > 0)
             factory = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(settings.ConfigureServices));
         return new StartedHost(

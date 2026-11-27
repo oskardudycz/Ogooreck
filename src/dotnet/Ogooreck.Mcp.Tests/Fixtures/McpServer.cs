@@ -68,16 +68,16 @@ public sealed class McpServer: IAsyncLifetime
     }
 
     public async Task<TestRunResult> TestRun(string project, string[]? arguments = null, int repeat = 1, int? hangTimeout = null,
-        bool build = false, string? coverage = null)
+        bool build = false, string? coverage = null, string? coverageFiles = null, int coverageTop = 25, string coverageSort = "uncovered")
     {
         string[] configured = ["--configuration", Configuration, .. arguments ?? []];
         var withBuild = build ? configured : ["--no-build", .. configured];
-        var key = string.Join(' ', [project, .. withBuild, $"repeat={repeat}", $"hangTimeout={hangTimeout}", $"coverage={coverage}"]);
+        var key = string.Join(' ', [project, .. withBuild, $"repeat={repeat}", $"hangTimeout={hangTimeout}", $"coverage={coverage}", $"coverageFiles={coverageFiles}", $"coverageTop={coverageTop}", $"coverageSort={coverageSort}"]);
         if (!build && lastRun?.Key == key)
             return lastRun.Value.Result;
 
         var result = await Call("ogooreck_test_run",
-            new() { ["project"] = project, ["arguments"] = withBuild, ["repeat"] = repeat, ["hangTimeout"] = hangTimeout, ["coverage"] = coverage });
+            new() { ["project"] = project, ["arguments"] = withBuild, ["repeat"] = repeat, ["hangTimeout"] = hangTimeout, ["coverage"] = coverage, ["coverageFiles"] = coverageFiles, ["coverageTop"] = coverageTop, ["coverageSort"] = coverageSort });
         Assert.True(result.IsError is null or false, ToolResults.Text(result));
         var run = ToolResults.Structured<TestRunResult>(result);
         lastRun = (key, run);
