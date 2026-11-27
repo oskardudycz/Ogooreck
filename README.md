@@ -16,12 +16,10 @@ Main assumptions:
 - testing frameworks and assert library agnostic,
 - keep things simple, but allow compositions and extension.
 
-Current available for API testing.
-
-
 Current available for testing:
 - [Business Logic](#business-logic-testing),
-- [API](#api-testing).
+- [API](#api-testing), with messages, events, traces and metrics,
+- [exporting the traces of tests](#exporting-the-traces-of-tests) and the [MCP server](#mcp-server) for coding agents.
 
 Check also my articles: 
 - [Ogooreck introduction](https://event-driven.io/en/ogooreck_sneaky_bdd_testing_framework/),
@@ -605,402 +603,942 @@ See full sample in [tests](/src/dotnet/Ogooreck.BusinessLogic.Tests/Aggregates/S
 
 ## API Testing
 
-Ogooreck provides a set of helpers to set up HTTP requests, Response assertions. It's recommended to add such usings to your tests:
+Ogooreck tests your ASP.NET Core app as a black box, the same way as [Emmett's `ApiE2ESpecification`](https://event-driven.io/en/testing_event_driven_application/). Given steps describe what the outside world did before, a single When step is the action under test, and Then expectations check everything the app does in response: the HTTP response, the messages it publishes, the events it appends, which message caused which, the traces it produces and the metrics it changes.
+
+A test never sleeps. After each step, Ogooreck waits until the app has caught up: its consumers have handled what the step published, and its projections have processed what the step appended. So the next step sees the result, and the expectations check exactly what happened.
+
+### Packages
+
+| Package | What it adds |
+|---|---|
+| [Ogooreck](https://www.nuget.org/packages/Ogooreck/) | `ApiSpecification`: steps, response expectations, traces and metrics, in process or over OTLP. Also the business logic specifications. |
+| [Ogooreck.Wolverine](https://www.nuget.org/packages/Ogooreck.Wolverine/) | `WolverinePlugin`: records what the app publishes through Wolverine and waits through Wolverine's tracked sessions. |
+| [Ogooreck.Marten](https://www.nuget.org/packages/Ogooreck.Marten/) | `MartenPlugin`: records the events the app appends and waits for its async projections. |
+| [Ogooreck.Kafka](https://www.nuget.org/packages/Ogooreck.Kafka/) | `KafkaPlugin.Decorating()`: records what the app produces and waits until its consumers have read it. `KafkaPlugin.Consuming(...)`: records the messages of an app running out of process. |
+| [Ogooreck.RabbitMQ](https://www.nuget.org/packages/Ogooreck.RabbitMQ/) | `RabbitMQPlugin.Decorating()`: records what the app publishes and waits until its consumers have handled it. |
+| [Ogooreck.Mcp](https://www.nuget.org/packages/Ogooreck.Mcp/) | A dotnet tool: the [MCP server](#mcp-server) that runs your tests for coding agents and explains failures with their spans. |
+
+The packages target .NET 10 and .NET 11. The core package references no broker or database client, so you add only the plugins for the tools your app uses.
+
+Add these usings to your tests:
 
 ```csharp
 using Ogooreck.API;
+using static System.Net.HttpStatusCode;
 using static Ogooreck.API.ApiSpecification;
 ```
 
-Thanks to that, you'll get cleaner access to helper methods.
+### The first test
 
-See more in samples below!
+Inject `ApiSpecification<Program>` as a class fixture. It starts your app once for the test class with `WebApplicationFactory<Program>`, takes the JSON options from the app's services, and listens to the app's traces and metrics in process.
 
-### POST
+<!-- snippet: ApiGetSample -->
+<a id='snippet-ApiGetSample'></a>
+```cs
+[Fact]
+public Task GetProducts()
+{
+    var ct = TestContext.Current.CancellationToken;
 
-Ogooreck provides a set of helpers to construct the request (e.g. `URI`, `BODY`) and check the standardised responses.
-
-```csharp
-public Task POST_CreatesNewMeeting() =>
-    API.Given()
-        .When(
-            POST
-            URI("/api/meetings/),
-            BODY(new CreateMeeting(Guid.NewGuid(), "Event Sourcing Workshop"))
-        )
-        .Then(CREATED);
+    return API.Given()
+        .When(Request(client => client.GetAsync("/api/products", ct)))
+        .Then([ExpectResponse(OK)], ct);
+}
 ```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/API/Responses/ApiTests.cs#L14-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiGetSample' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-### PUT
+A request step is a plain function of `HttpClient`, so there is no request DSL to learn:
 
-You can also specify headers, e.g. `IF_MATCH` to perform an optimistic concurrency check.
+<!-- snippet: ApiPostSample -->
+<a id='snippet-ApiPostSample'></a>
+```cs
+[Fact]
+public Task RegisterProduct()
+{
+    var ct = TestContext.Current.CancellationToken;
 
-```csharp
-public Task PUT_ConfirmsShoppingCart() =>
-    API.Given()
-        .When(
-            PUT,
-            URI($"/api/ShoppingCarts/{API.ShoppingCartId}/confirmation"),
-            HEADERS(IF_MATCH(1))
-        )
-        .Then(OK);
+    return API.Given()
+        .When(Request(client => client.PostAsJsonAsync("/api/products",
+            new RegisterProductRequest("abc-123", "Ogooreck"), ct)))
+        .Then([ExpectResponse(Created,
+            Location(l => l.StartsWith("/api/products/")))], ct);
+}
 ```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/API/Responses/ApiTests.cs#L29-L43' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiPostSample' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Pass a cancellation token to `Then`. xUnit v3 asks for it with analyzer xUnit1051, so the samples pass `TestContext.Current.CancellationToken`.
+
+### Requests as steps
+
+Write the requests of a module once, as step functions in one class, and reuse them in Given and When. Each test then reads as the scenario it checks:
+
+<!-- snippet: ApiRequests -->
+<a id='snippet-ApiRequests'></a>
+```cs
+public static class ShopRequests
+{
+    public static TestStep CreateCart() =>
+        Request(client => client.PostAsync("/carts", null,
+            TestContext.Current.CancellationToken));
+
+    public static TestStep AddProduct(Guid cartId, string product) =>
+        Request(client => client.PostAsJsonAsync($"/carts/{cartId}/products",
+            new { product }, TestContext.Current.CancellationToken));
+
+    public static TestStep GetCart(Guid cartId) =>
+        Request(client => client.GetAsync($"/carts/{cartId}",
+            TestContext.Current.CancellationToken));
+
+    public static TestStep ConfirmCart(Guid cartId, long version) =>
+        Request(client =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Put,
+                $"/carts/{cartId}/confirmation");
+            request.Headers.IfMatch.Add(
+                EntityTagHeaderValue.Parse(WeakETag(version)));
+            return client.SendAsync(request,
+                TestContext.Current.CancellationToken);
+        });
+
+    public static TestStep RemoveProduct(Guid cartId, string product,
+        long version) =>
+        Request(client =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Delete,
+                $"/carts/{cartId}/products/{product}");
+            request.Headers.IfMatch.Add(
+                EntityTagHeaderValue.Parse(WeakETag(version)));
+            return client.SendAsync(request,
+                TestContext.Current.CancellationToken);
+        });
+
+    public static TestStep PlaceOrder(Guid cartId) =>
+        Request(client => client.PostAsync($"/carts/{cartId}/orders", null,
+            TestContext.Current.CancellationToken));
+```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Fixtures/ShopRequests.cs#L9-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiRequests' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The tests below share one app through the class fixture, and each test uses its own new ids, so they can run in parallel:
+
+<!-- snippet: ApiClassFixture -->
+<a id='snippet-ApiClassFixture'></a>
+```cs
+public class CartsApiTests(ApiSpecification<Program> api)
+    : IClassFixture<ApiSpecification<Program>>
+{
+    private readonly Guid cartId = Guid.NewGuid();
+
+    private readonly CancellationToken ct =
+        TestContext.Current.CancellationToken;
+```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L9-L19' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiClassFixture' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 ### GET
 
-You can also do response body assertions, to, e.g. out of the box check if the response body is equivalent to the expected one:
+`Body` matches the fields you give and allows extra ones. Array order and length matter at every level. `ETag`, `Location` and `Headers` check the response headers:
 
-```csharp
-public Task GET_ReturnsShoppingCartDetails() =>
-    API.Given()
-        .When(GET, URI($"/api/ShoppingCarts/{API.ShoppingCartId}"))
-        .Then(
-            OK,
-            RESPONSE_BODY(new ShoppingCartDetails
-            {
-                Id = API.ShoppingCartId,
-                Status = ShoppingCartStatus.Confirmed,
-                ProductItems = new List<PricedProductItem>(),
-                ClientId = API.ClientId,
-                Version = 2,
-            }));
+<!-- snippet: ApiGetCart -->
+<a id='snippet-ApiGetCart'></a>
+```cs
+[Fact]
+public Task AddingAProduct_ShowsItInTheCart() =>
+    api.Given(AddProduct(cartId, "socks"))
+        .When(GetCart(cartId))
+        .Then([
+            ExpectResponse(OK,
+                Body(new { products = new[] { "socks" } }),
+                ETag(WeakETag(1)))
+        ], ct);
 ```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L21-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiGetCart' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-You can also use `GET_UNTIL` helper to check API that has eventual consistency.
+### POST
 
-You can use various conditions, e.g. `RESPONSE_SUCCEEDED` waits until a response has one of the 2xx statuses. That's useful for new resource creation scenarios.
-
-```csharp
-public Task GET_ReturnsShoppingCartDetails() =>
-    API.Given()
-        .When(GET, URI($"/api/ShoppingCarts/{API.ShoppingCartId}"))
-        .Until(RESPONSE_SUCCEEDED)
-        .Then(
-            OK,
-            RESPONSE_BODY(new ShoppingCartDetails
-            {
-                Id = API.ShoppingCartId,
-                Status = ShoppingCartStatus.Confirmed,
-                ProductItems = new List<PricedProductItem>(),
-                ClientId = API.ClientId,
-                Version = 2,
-            }));
+<!-- snippet: ApiPostCreated -->
+<a id='snippet-ApiPostCreated'></a>
+```cs
+[Fact]
+public Task PlacingAnOrder_RespondsWithTheOrderAndItsLocation() =>
+    api.Given(AddProduct(cartId, "socks"))
+        .When(PlaceOrder(cartId))
+        .Then([
+            ExpectResponse(Created,
+                Location($"/orders/{cartId}"),
+                Body(new { status = "Placed" }))
+        ], ct);
 ```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L76-L88' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiPostCreated' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-You can also use `RESPONSE_ETAG_IS` helper to check if ETag matches your expected version. That's useful for state change verification.
+### PUT
 
-```csharp
-public Task GET_ReturnsShoppingCartDetails() =>
-    API.Given()
-        .When(GET, URI($"/api/ShoppingCarts/{API.ShoppingCartId}"))
-        .Until(RESPONSE_ETAG_IS(2))
-        .Then(
-            OK,
-            RESPONSE_BODY(new ShoppingCartDetails
-            {
-                Id = API.ShoppingCartId,
-                Status = ShoppingCartStatus.Confirmed,
-                ProductItems = new List<PricedProductItem>(),
-                ClientId = API.ClientId,
-                Version = 2,
-            }));
+Set request headers on an `HttpRequestMessage`, for example `If-Match` for an optimistic concurrency check, as `ConfirmCart` in the requests above does:
+
+<!-- snippet: ApiPutWithIfMatch -->
+<a id='snippet-ApiPutWithIfMatch'></a>
+```cs
+[Fact]
+public Task ConfirmingACart_WithItsVersion_ConfirmsIt() =>
+    api.Given(AddProduct(cartId, "socks"))
+        .When(ConfirmCart(cartId, version: 1))
+        .Then([ExpectResponse(NoContent)], ct);
+
+[Fact]
+public Task ConfirmingACart_WithAnOutdatedVersion_IsRejected() =>
+    api.Given(AddProduct(cartId, "socks"), AddProduct(cartId, "shoes"))
+        .When(ConfirmCart(cartId, version: 1))
+        .Then([ExpectError(PreconditionFailed)], ct);
 ```
-
-You can also do more advanced filtering via `RESPONSE_BODY_MATCHES`. That's useful for testing filtering scenarios with eventual consistency (e.g. having `Elasticsearch` as storage).
-
-You can also do custom checks on the body, providing expression.
-
-```csharp
-public Task GET_ReturnsShoppingCartDetails() =>
-    API.Given()
-        .When(
-            GET,
-            URI($"{MeetingsSearchApi.MeetingsUrl}?filter={MeetingName}")
-        )
-        .UNTIL(
-            RESPONSE_BODY_MATCHES<IReadOnlyCollection<Meeting>>(
-                meetings => meetings.Any(m => m.Id == MeetingId))
-        )
-        .Then(
-            RESPONSE_BODY<IReadOnlyCollection<Meeting>>(meetings =>
-                Assert.Contains(meetings, meeting =>
-                    meeting.Id == MeetingId
-                    && meeting.Name == MeetingName
-                )
-            ));
-```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L46-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiPutWithIfMatch' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 ### DELETE
 
-Of course, the delete keyword is also supported.
+A DELETE is a step like any other, so it can be one of the Given steps:
 
-```csharp
-public Task DELETE_ShouldRemoveProductFromShoppingCart() =>
-    API.Given()
-        .When(
-            DELETE, 
-            URI($"/api/ShoppingCarts/{API.ShoppingCartId}/products/{API.ProductItem.ProductId}?quantity={RemovedCount}&unitPrice={API.UnitPrice}"),
-            HEADERS(IF_MATCH(1))
-        )
-        .Then(NO_CONTENT);
+<!-- snippet: ApiDelete -->
+<a id='snippet-ApiDelete'></a>
+```cs
+[Fact]
+public Task RemovingAProduct_TakesItOutOfTheCart() =>
+    api.Given(
+            AddProduct(cartId, "socks"),
+            AddProduct(cartId, "shoes"),
+            RemoveProduct(cartId, "socks", version: 2))
+        .When(GetCart(cartId))
+        .Then([ExpectResponse(OK, Body(new { products = new[] { "shoes" } }))],
+            ct);
 ```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L62-L74' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiDelete' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-### Using data from results of the previous tests
+### Using data from results of the previous steps
 
-For instance created id to shape proper URI.
+A step that needs an id the server generated takes a second argument, the step context. `ctx.CreatedId()` reads the id from the `Location` of the first `201 Created` response, and `ctx.CreatedId<T>()` converts it. `ctx.Responses` holds all earlier responses:
 
-```csharp
-public class CancelShoppingCartTests: IClassFixture<ApiSpecification<Program>>
+<!-- snippet: ApiCreatedId -->
+<a id='snippet-ApiCreatedId'></a>
+```cs
+[Fact]
+public Task CreatedCart_CanBeReadByItsId() =>
+    api.Given(CreateCart())
+        .When(Request((client, ctx) =>
+            client.GetAsync($"/carts/{ctx.CreatedId()}", ct)))
+        .Then([ExpectResponse(OK, Body(new { status = "Open" }))], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L35-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiCreatedId' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+### Errors
+
+`ExpectError` checks an error status, and optionally the problem details, field by field:
+
+<!-- snippet: ApiErrors -->
+<a id='snippet-ApiErrors'></a>
+```cs
+[Fact]
+public Task GettingAnUnknownCart_IsNotFound() =>
+    api.Given()
+        .When(GetCart(cartId))
+        .Then([ExpectError(NotFound, new { title = "Cart not found" })], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L90-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiErrors' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+A failing Given request fails the test, saying which step failed, with its status and body. Wrap a Given request that may fail in `Attempt(...)`.
+
+### Scenarios
+
+Group the Given steps of a scenario into an array named after it, and reuse it across tests. `Given(scenario, more...)` and `Scenario(scenario, more...)` join an array with more steps:
+
+<!-- snippet: ApiScenario -->
+<a id='snippet-ApiScenario'></a>
+```cs
+[Fact]
+public Task PlacingAnOrder_ForAConfirmedCart_IsAConflict()
 {
-    private readonly ApiSpecification<Program> API;
-    public CancelShoppingCartTests(ApiSpecification<Program> api) => API = api;
+    TestStep[] confirmedCart =
+        [AddProduct(cartId, "socks"), ConfirmCart(cartId, version: 1)];
 
-    public readonly Guid ClientId = Guid.NewGuid();
-
-    [Fact]
-    [Trait("Category", "Acceptance")]
-    public Task Delete_Should_Return_OK_And_Cancel_Shopping_Cart() =>
-        API
-            .Given(
-                "Opened ShoppingCart",
-                POST,
-                URI("/api/ShoppingCarts"),
-                BODY(new OpenShoppingCartRequest(clientId: Guid.NewGuid()))
-            )
-            .When(
-                "Cancel Shopping Cart",
-                DELETE,
-                URI(ctx => $"/api/ShoppingCarts/{ctx.GetCreatedId()}"),
-                HEADERS(IF_MATCH(0))
-            )
-            .Then(OK);
+    return api.Given(confirmedCart)
+        .When(PlaceOrder(cartId))
+        .Then([ExpectError(Conflict, new { title = "Cart already closed" })],
+            ct);
 }
 ```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L100-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiScenario' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-### Scenarios and advanced composition
+### Redirects and pages
 
-Ogooreck supports various ways of composing the API, e.g.
+Ogooreck doesn't follow redirects and keeps no cookies, so a test sees what the app answered:
 
-**Classic Async/Await**
+<!-- snippet: ApiRedirectsAndHtml -->
+<a id='snippet-ApiRedirectsAndHtml'></a>
+```cs
+[Fact]
+public Task CartSummary_RedirectsToTheCart() =>
+    api.Given(AddProduct(cartId, "socks"))
+        .When(GetCartSummary(cartId))
+        .Then([ExpectResponse(Found, RedirectsTo($"/carts/{cartId}"))], ct);
 
-```csharp
-public async Task POST_WithExistingSKU_ReturnsConflictStatus() =>
+[Fact]
+public Task OrderPage_ShowsThatTheOrderWasPlaced() =>
+    api.Given(AddProduct(cartId, "socks"), PlaceOrder(cartId))
+        .When(GetOrderPage(cartId))
+        .Then([ExpectResponse(OK, HtmlContaining("Order placed"))], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L116-L130' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiRedirectsAndHtml' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`Satisfying(response => ...)` runs your own check on the response.
+
+### Messages and catching up
+
+Ogooreck records what the app publishes and appends through decorators on the app's own services, and after each step it asks each tool whether the app has caught up. You add a tool with one `Use(plugin)` call in the specification's configuration. Keep the plugin in one place, so tests can name its recorder.
+
+`ExpectPublished` checks exactly the messages the When step published, in order, and `ExpectNothingPublished` checks that it published none. `ExpectAppended` and `ExpectNothingAppended` do the same for the events the When step appended. `ExpectCausation` checks which message caused which, through their correlation and causation ids, with `Published`, `Sent` and `Appended` as its nodes.
+
+After each step, Ogooreck runs the plugins' catch-up until a round finds nothing new. So the When step's messages are all there when the expectations run, and the next step sees what the app's consumers did, with no waiting in the test.
+
+#### Wolverine
+
+<!-- snippet: WolverinePlugin -->
+<a id='snippet-WolverinePlugin'></a>
+```cs
+public static class Messaging
 {
-    // Given
-    var request = new RegisterProductRequest("AA2039485", ValidName, ValidDescription);
-
-    // first one should succeed
-    await API.Given()
-        .When(
-            POST,
-            URI("/api/products/"),
-            BODY(request)
-        )
-        .Then(CREATED);
-
-    // second one will fail with conflict
-    await API.Given()
-        .When(
-            POST,
-            URI("/api/products/"),
-            BODY(request)
-        )
-        .Then(CONFLICT);
+    public static readonly WolverinePlugin Wolverine = new WolverinePlugin()
+        .MessageTypes(type => type.Namespace == typeof(OrderPlaced).Namespace);
 }
 ```
+<sup><a href='/src/dotnet/Ogooreck.Wolverine.Tests/Fixtures/Messaging.cs#L6-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-WolverinePlugin' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-**Joining with `And`**
+The specification uses the plugin, and a [fake clock plugin](#writing-a-plugin) for the tests that move time:
 
-```csharp
-public async Task POST_WithExistingSKU_ReturnsConflictStatus() =>
+<!-- snippet: WolverineShopApi -->
+<a id='snippet-WolverineShopApi'></a>
+```cs
+public class ShopApi: ApiSpecification<Program>
 {
-    // Given
-    var request = new RegisterProductRequest("AA2039485", ValidName, ValidDescription);
+    public ShopApi()
+        : base(spec => spec
+            .Use(Messaging.Wolverine)
+            .Use(((ShopApi)spec).AppClock))
+    { }
 
-    // first one should succeed
-    await API.Given()
-        .When(
-            POST,
-            URI("/api/products/"),
-            BODY(request)
-        )
-        .Then(CREATED)
-        .And()
-        .When(
-            POST,
-            URI("/api/products/"),
-            BODY(request)
-        )
-        .Then(CONFLICT);
+    public FakeClock AppClock { get; } = new();
 }
 ```
+<sup><a href='/src/dotnet/Ogooreck.Wolverine.Tests/Fixtures/ShopApi.cs#L5-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-WolverineShopApi' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-**Chained Api Scenario**
+<!-- snippet: WolverineExpectPublished -->
+<a id='snippet-WolverineExpectPublished'></a>
+```cs
+[Fact]
+public Task PlacingAnOrder_PublishesOrderPlaced() =>
+    api.Given(AddProduct(cartId, "socks"))
+        .When(PlaceOrder(cartId))
+        .Then([
+            ExpectResponse(Created),
+            ExpectPublished(
+                new OrderPlaced(cartId) { Total = 5, Products = ["socks"] })
+        ], ct);
 
-```csharp
-public async Task Post_ShouldReturn_CreatedStatus_With_CartId()
+[Fact]
+public Task CheckingOut_PlacesTheOrderAndClosesTheCart() =>
+    api.Given(AddProduct(cartId, "socks"))
+        .When(CheckOut(cartId))
+        .Then([
+            ExpectPublished(
+                new OrderPlaced(cartId) { Total = 5, Products = ["socks"] },
+                new CartClosed(cartId))
+        ], ct);
+
+[Fact]
+public Task ViewingACart_PublishesNothing() =>
+    api.Given(AddProduct(cartId, "socks"))
+        .When(GetCart(cartId))
+        .Then([ExpectResponse(OK), ExpectNothingPublished()], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Wolverine.Tests/Orders/OrdersApiTests.cs#L16-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-WolverineExpectPublished' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+#### Marten
+
+<!-- snippet: MartenPlugin -->
+<a id='snippet-MartenPlugin'></a>
+```cs
+public static class EventStore
 {
-    var createdReservationId = Guid.Empty;
+    public static readonly MartenPlugin Marten = new();
+}
+```
+<sup><a href='/src/dotnet/Ogooreck.Marten.Tests/Fixtures/EventStore.cs#L5-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-MartenPlugin' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-    await API.Scenario(
-        // Create Reservations
-        API.Given()
-            .When(
-                POST,        
-                URI("/api/Reservations/"),
-                BODY(new CreateTentativeReservationRequest { SeatId = SeatId })
-            )
-            .Then(CREATED,
-                response =>
+The specification points the app at the test database. Each copy of the app gets its own schema, so copies don't see each other's data:
+
+<!-- snippet: MartenShopApi -->
+<a id='snippet-MartenShopApi'></a>
+```cs
+public class ShopApi(PostgresDatabase database): ApiSpecification<Program>(
+    factory => factory.WithWebHostBuilder(builder => builder
+        .UseSetting("ConnectionStrings:Marten", database.ConnectionString)
+        .UseSetting("Marten:Schema", $"shop_{Guid.NewGuid():N}")),
+    spec => spec.Use(EventStore.Marten));
+```
+<sup><a href='/src/dotnet/Ogooreck.Marten.Tests/Fixtures/ShopApi.cs#L5-L13' title='Snippet source file'>snippet source</a> | <a href='#snippet-MartenShopApi' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+<!-- snippet: MartenExpectAppended -->
+<a id='snippet-MartenExpectAppended'></a>
+```cs
+[Fact]
+public Task PlacingAnOrder_AppendsOrderPlaced() =>
+    shop.Given(AddProduct(cartId, "socks"))
+        .When(PlaceOrder(cartId))
+        .Then([ExpectAppended(new OrderPlaced(cartId))], ct);
+
+[Fact]
+public Task ShippingAnOrder_AppendsOrderShipped_CausedByOrderPlaced() =>
+    shop.Given()
+        .When(ShipOrder(cartId))
+        .Then([
+            ExpectCausation(Appended(new OrderPlaced(cartId),
+                Appended(new OrderShipped(cartId))))
+        ], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Marten.Tests/Orders/OrdersApiTests.cs#L15-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-MartenExpectAppended' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Catch-up waits for the async projections, so a read right after a write sees it:
+
+<!-- snippet: MartenProjectionCatchUp -->
+<a id='snippet-MartenProjectionCatchUp'></a>
+```cs
+[Fact]
+public Task AddingAProduct_ShowsItInTheCartProjection() =>
+    shop.Given(AddProduct(cartId, "socks"))
+        .When(GetCart(cartId))
+        .Then([ExpectResponse(OK, Body(new { products = new[] { "socks" } }))],
+            ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Marten.Tests/Orders/OrdersApiTests.cs#L34-L43' title='Snippet source file'>snippet source</a> | <a href='#snippet-MartenProjectionCatchUp' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+#### Kafka
+
+<!-- snippet: KafkaPlugin -->
+<a id='snippet-KafkaPlugin'></a>
+```cs
+public static class Messaging
+{
+    public static readonly KafkaPlugin<string, string> Kafka =
+        KafkaPlugin.Decorating().MessageTypes(typeof(OrderPlaced),
+            typeof(CartClosed), typeof(ShipOrder), typeof(OrderPaid),
+            typeof(StockChecked));
+}
+```
+<sup><a href='/src/dotnet/Ogooreck.Kafka.Tests/Fixtures/Messaging.cs#L6-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-KafkaPlugin' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The specification points the app at the broker and gives it its own topic and consumer group. A low `fetch.wait.max.ms` makes the app's consumers answer catch-up fast:
+
+<!-- snippet: KafkaShopApi -->
+<a id='snippet-KafkaShopApi'></a>
+```cs
+public class ShopApi(KafkaBroker broker): ApiSpecification<Program>(
+    factory => factory.WithWebHostBuilder(builder => builder
+        .UseSetting("Kafka:BootstrapServers", broker.BootstrapServers)
+        .UseSetting("Kafka:Topic", Topic)
+        .UseSetting("Kafka:ShippingGroupId", "shop-shipping")
+        .UseSetting("Kafka:Consumer:fetch.wait.max.ms", "10")),
+    spec => spec.Use(Messaging.Kafka))
+{
+    public const string Topic = "shop";
+}
+```
+<sup><a href='/src/dotnet/Ogooreck.Kafka.Tests/Fixtures/ShopApi.cs#L5-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-KafkaShopApi' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The When step places an order; the app's shipping consumer handles `OrderPlaced` and publishes `ShipOrder`. Catch-up waits until that consumer is back in `Consume` at the end offsets, so the exact check sees both messages, and the next step sees the order shipped:
+
+<!-- snippet: KafkaCatchUp -->
+<a id='snippet-KafkaCatchUp'></a>
+```cs
+[Fact]
+public Task PlacingAnOrder_ShipsIt() =>
+    shop.Given()
+        .When(PlaceOrderToShip(cartId))
+        .Then([
+            ExpectPublished(new OrderPlaced(cartId), new ShipOrder(cartId)),
+            ExpectCausation(Published(new OrderPlaced(cartId),
+                Sent(new ShipOrder(cartId))))
+        ], ct);
+
+[Fact]
+public Task AfterPlacingAnOrder_TheCartShowsItShipped() =>
+    shop.Given(PlaceOrderToShip(cartId))
+        .When(GetCart(cartId))
+        .Then([ExpectResponse(OK, Body(new { cartId, shipped = true }))], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Kafka.Tests/Shipping/ShippingApiTests.cs#L15-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-KafkaCatchUp' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+#### RabbitMQ
+
+<!-- snippet: RabbitMQPlugin -->
+<a id='snippet-RabbitMQPlugin'></a>
+```cs
+public static class Messaging
+{
+    public static readonly RabbitMQPlugin RabbitMQ = RabbitMQPlugin.Decorating()
+        .MessageTypes(typeof(OrderPlaced), typeof(ShipOrder));
+}
+```
+<sup><a href='/src/dotnet/Ogooreck.RabbitMQ.Tests/Fixtures/Messaging.cs#L6-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-RabbitMQPlugin' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The specification points the app at the broker and gives it its own exchange and queue:
+
+<!-- snippet: RabbitMQShopApi -->
+<a id='snippet-RabbitMQShopApi'></a>
+```cs
+public class ShopApi(RabbitMQBroker broker): ApiSpecification<Program>(
+    factory => factory.WithWebHostBuilder(builder => builder
+        .UseSetting("RabbitMQ:ConnectionString", broker.ConnectionString)
+        .UseSetting("RabbitMQ:Exchange", "shop")
+        .UseSetting("RabbitMQ:ShippingQueue", "shop-shipping")),
+    spec => spec.Use(Messaging.RabbitMQ));
+```
+<sup><a href='/src/dotnet/Ogooreck.RabbitMQ.Tests/Fixtures/ShopApi.cs#L5-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-RabbitMQShopApi' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Catch-up sends a probe through each queue the app consumes and waits until it comes back with no handler running:
+
+<!-- snippet: RabbitMQCatchUp -->
+<a id='snippet-RabbitMQCatchUp'></a>
+```cs
+[Fact]
+public Task PlacingAnOrder_ShipsIt() =>
+    shop.Given()
+        .When(PlaceOrder(orderId))
+        .Then([
+            ExpectPublished(new OrderPlaced(orderId), new ShipOrder(orderId)),
+            ExpectCausation(Published(new OrderPlaced(orderId),
+                Sent(new ShipOrder(orderId))))
+        ], ct);
+
+[Fact]
+public Task AfterPlacingAnOrder_TheOrderIsShipped() =>
+    shop.Given(PlaceOrder(orderId))
+        .When(GetOrder(orderId))
+        .Then([ExpectResponse(OK, Body(new { status = "Shipped" }))], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.RabbitMQ.Tests/Shipping/ShippingApiTests.cs#L15-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-RabbitMQCatchUp' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+#### What each plugin waits for
+
+| Plugin | Catches up when |
+|---|---|
+| `WolverinePlugin` | Wolverine's tracked session for the step has finished. Run those tests serially, as Wolverine's docs keep tracked-session tests in one collection. |
+| `MartenPlugin` | Marten's async projections have processed the step's events. `WithoutCatchUp()` turns it off. |
+| `KafkaPlugin.Decorating()` | Every consumer the app gets from DI is back in `Consume` with its positions at the end offsets. |
+| `RabbitMQPlugin.Decorating()` | A probe message sent to each queue the app consumes has come back, and no handler is running or requeued. |
+| `KafkaPlugin.Consuming(...)` | Never: it reads the topics from the test, for an app out of process. `ExpectPublished` then passes as soon as the expected messages arrive, in that order with others between them, and `ExpectNothingPublished` fails at once, saying it needs a catch-up. |
+
+The plugins wait only for the consumers that the app gets from DI. Ogooreck creates no topics, queues or exchanges: the app or its AppHost creates them, or, as in these tests, the broker fixture. Each copy of the app runs its own consumers, so two copies in one Kafka group or on one RabbitMQ queue split the messages. Give each copy its own group or queue names, as the specifications above do, or run one app per test project through an assembly fixture.
+
+A consumer the plugin can't wait for, such as a loop that hands messages to other tasks, needs your own catch-up: `CatchUp(ct => ...)` runs after each step, and `CatchUp((step, ct) => ...)` wraps it. Give it to one test with `api.With(spec => spec.CatchUp(...))`, which runs on the same app with the test setup changed.
+
+#### Messages from other systems, actions and time
+
+`Publish(...)` puts messages on the app's bus, as another module or system would. `Action(ctx => ...)` runs any code, such as advancing a fake clock:
+
+<!-- snippet: WolverinePublish -->
+<a id='snippet-WolverinePublish'></a>
+```cs
+[Fact]
+public Task ConfirmedPayment_MarksTheOrderPaid() =>
+    api.Given(AddProduct(cartId, "socks"), PlaceOrder(cartId))
+        .When(Publish(new PaymentConfirmed(cartId)))
+        .Then([ExpectPublished(new OrderPaid(cartId))], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Wolverine.Tests/Orders/OrdersApiTests.cs#L46-L54' title='Snippet source file'>snippet source</a> | <a href='#snippet-WolverinePublish' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+<!-- snippet: WolverineAction -->
+<a id='snippet-WolverineAction'></a>
+```cs
+[Fact]
+public async Task AnAbandonedCart_ExpiresAfterADay()
+{
+    await using var shop = new ShopApi();
+
+    await shop.Given(AddProduct(cartId, "socks"))
+        .When(Action(_ =>
+        {
+            shop.AppClock.Advance(TimeSpan.FromDays(1));
+            return Task.CompletedTask;
+        }))
+        .Then([ExpectPublished(new CartExpired(cartId))], ct);
+}
+```
+<sup><a href='/src/dotnet/Ogooreck.Wolverine.Tests/Orders/OrdersApiTests.cs#L56-L72' title='Snippet source file'>snippet source</a> | <a href='#snippet-WolverineAction' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+#### Message headers
+
+The Kafka and RabbitMQ plugins read the recommended headers without any setup: `messageType`, `messageId`, `correlationId`, `causationId` and `traceparent`. An app with other header names passes its own `MessageHeaders` to `Headers(...)`.
+
+#### Eventually
+
+Use `Eventually(request)` only for an app with no idle signal, for example a read model that a background job updates. It re-sends the When request while its response expectations fail, until they pass or the deadline passes:
+
+<!-- snippet: WolverineEventually -->
+<a id='snippet-WolverineEventually'></a>
+```cs
+[Fact]
+public Task PlacedOrder_EventuallyShowsAsPlaced() =>
+    api.Given(AddProduct(cartId, "socks"), PlaceOrder(cartId))
+        .When(Eventually(GetOrder(cartId)))
+        .Then([ExpectResponse(OK, Body(new { status = "Placed" }))], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Wolverine.Tests/Orders/OrdersApiTests.cs#L74-L82' title='Snippet source file'>snippet source</a> | <a href='#snippet-WolverineEventually' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+### Trace context ties everything to the test
+
+Each step gets a new W3C `traceparent`. Ogooreck sends it with every request and passes it to actions (`ctx.Traceparent`) and publish functions. The app must carry it into the messages and events it writes, as a `traceparent` header. ASP.NET Core already starts the request's `Activity` from it, so the app reads `Activity.Current.Id` when it publishes, as the Kafka, RabbitMQ and Marten samples do.
+
+Ogooreck counts a message or an event as the When step's only when it carries the When step's trace id. Messages of the Given steps, of other tests on the same broker, and late arrivals don't count. That makes parallel tests against a shared broker and database safe. When `ExpectPublished` finds no message that the app did publish, check that the message carries the `traceparent` header.
+
+### Traces and metrics
+
+`ExpectTrace` checks that the spans of the test's steps contain a span tree. `ExpectCorrelatedTrace` checks that all spans of a trace carry the same correlation id:
+
+<!-- snippet: ApiTrace -->
+<a id='snippet-ApiTrace'></a>
+```cs
+[Fact]
+public Task PlacingAnOrder_PublishesAndHandlesOrderPlaced() =>
+    api.Given(AddProduct(cartId, "socks"))
+        .When(PlaceOrder(cartId))
+        .Then([
+            ExpectTrace(Span("POST /carts/{id}/orders",
+                Span("publish OrderPlaced",
+                    Span("handle OrderPlaced"))))
+        ], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L132-L144' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiTrace' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`ExpectMetric` checks how much a counter grew since the baseline that Ogooreck takes after the Given steps:
+
+<!-- snippet: ApiMetric -->
+<a id='snippet-ApiMetric'></a>
+```cs
+[Fact]
+public Task PlacingAnOrder_CountsAWebOrder() =>
+    api.Given(AddProduct(cartId, "socks"))
+        .When(PlaceOrder(cartId))
+        .Then([
+            ExpectMetric("orders.placed",
+                new Dictionary<string, string>
                 {
-                    createdReservationId = response.GetCreatedId<Guid>();
-                    return ValueTask.CompletedTask;
-                }),
+                    ["channel"] = "web",
+                    ["cart.id"] = cartId.ToString()
+                },
+                increase: 1)
+        ], ct);
+```
+<sup><a href='/src/dotnet/Ogooreck.Api.Tests/Carts/CartsApiTests.cs#L146-L162' title='Snippet source file'>snippet source</a> | <a href='#snippet-ApiMetric' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-        // Get reservation details
-        _ => API.Given()
-            .When(
-                GET
-                URI($"/api/Reservations/{createdReservationId}")
-            )
-            .Then(
-                OK,
-                RESPONSE_BODY<ReservationDetails>(reservation =>
-                {
-                    Assert.Equal(createdReservationId, reservation.Id);
-                    Assert.Equal(ReservationStatus.Tentative, reservation.Status);
-                    Assert.Equal(SeatId, reservation.SeatId);
-                    Assert.NotEmpty(reservation.Number);
-                    Assert.Equal(1, reservation.Version);
-                })),
+Measurements without a trace id can't be tied to a test: observable instruments, counters recorded outside any request's activity, and anything that arrives over OTLP. Filter them by a tag unique to the test, as the `cart.id` tag above, or run those tests serially.
 
-        // Get reservations list
-        _ => API.Given()
-            .When(GET, URI("/api/Reservations/"))
-            .Then(
-                OK,
-                RESPONSE_BODY<PagedListResponse<ReservationShortInfo>>(reservations =>
-                {
-                    Assert.NotNull(reservations);
-                    Assert.NotNull(reservations.Items);
+### Setting up the app
 
-                    Assert.Equal(1, reservations.Items.Count);
-                    Assert.Equal(1, reservations.TotalItemCount);
-                    Assert.Equal(false, reservations.HasNextPage);
+Each configuration call replaces its default, before the first step:
 
-                    var reservationInfo = reservations.Items.Single();
+| Setup | What it does |
+|---|---|
+| `IClassFixture<ApiSpecification<Program>>`, `ApiSpecification.For<Program>()` | Starts `WebApplicationFactory<Program>` on the first step. Telemetry in process, deadline 30 seconds. |
+| `For<Program>(factory => factory.WithWebHostBuilder(...))`, or a subclass passing it to the base constructor | Changes the host, for example its settings or services. |
+| `.Use(plugin)` | Adds a messaging tool or event store. Repeatable. |
+| `.Deadline(TimeSpan)` | How long an expectation or catch-up may wait before it fails. It only bounds failures. |
+| `.Clock(TimeProvider)`, `.Json(JsonSerializerOptions)`, `.Telemetry(source)` | The clock of the deadline, the JSON options of `Body`, and where traces and metrics come from (`TelemetrySources.Off` turns them off). |
+| `api.With(spec => ...)` | Another test setup on the same running app. |
+| `api.WithNewApp(spec => ...)` | A separate app, for a plugin that changes the app's services. |
+| `ApiSpecification.For(async () => address)` | An app that runs out of process, for example in Aspire. |
+| `ApiSpecification.For(host)` | A host you built yourself with `UseTestServer()`. |
 
-                    Assert.Equal(createdReservationId, reservationInfo.Id);
-                    Assert.False(string.IsNullOrEmpty(reservationInfo.Number));
-                    Assert.Equal(ReservationStatus.Tentative, reservationInfo.Status);
-                })),
+When a project uses one setup everywhere, write it once in a subclass, such as `ShopApi: ApiSpecification<Program>`, and share it through your test framework's fixtures: `IClassFixture`, a collection or assembly fixture, NUnit's `SetUpFixture` or MSTest's `AssemblyInitialize`.
 
-        // Get reservation history
-        _ => API.Given()
-            .When(GET, URI($"/api/Reservations/{createdReservationId}/history"))
-            .Then(
-                OK,
-                RESPONSE_BODY<PagedListResponse<ReservationHistory>>(reservations =>
-                {
-                    Assert.NotNull(reservations);
-                    Assert.NotNull(reservations.Items);
+### Writing a plugin
 
-                    Assert.Equal(1, reservations.Items.Count);
-                    Assert.Equal(1, reservations.TotalItemCount);
-                    Assert.Equal(false, reservations.HasNextPage);
+A plugin implements `ISpecificationPlugin`. Its `Register` method adds services to the test host, recorders (`Recording`, `Appending`), catch-up and a publish function:
 
-                    var reservationInfo = reservations.Items.Single();
+<!-- snippet: FakeClockPlugin -->
+<a id='snippet-FakeClockPlugin'></a>
+```cs
+public sealed class FakeClock: ISpecificationPlugin
+{
+    private readonly FakeTimeProvider time = new();
 
-                    Assert.Equal(createdReservationId, reservationInfo.ReservationId);
-                    Assert.StartsWith("Created tentative reservation with number", reservationInfo.Description);
-                }))
-    );
+    public void Advance(TimeSpan by) => time.Advance(by);
+
+    public void Register(SpecificationPluginRegistration registration) =>
+        registration.Services(services =>
+            services.AddSingleton<TimeProvider>(time));
 }
 ```
+<sup><a href='/src/dotnet/Ogooreck.Wolverine.Tests/Fixtures/FakeClock.cs#L7-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-FakeClockPlugin' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-### XUnit setup
+For another messaging tool, decorate the app's own service with `services.Decorate<TService>(...)`, record its calls with `CallRecorder.Wrap(...)`, and read the recommended headers with `MessageReader`.
 
-### Injecting as Class Fixture
+### Apps out of process (Aspire)
 
-By default, it's recommended to inject `ApiSpecification<YourProgram>` instance as `ClassFixture` to ensure that all dependencies (e.g. `HttpClient`) will be appropriately disposed.
+An app that runs in another process exports its telemetry over OTLP. `OtlpReceiver` is an OTLP/HTTP endpoint in the test: start it first and pass its `Endpoint` to the app. `ForwardTo` sends every export on to another collector, so the app's spans also show up next to the test's:
 
-```csharp
-public class CreateMeetingTests: IClassFixture<ApiSpecification<Program>>
+<!-- snippet: AspireSpecification -->
+<a id='snippet-AspireSpecification'></a>
+```cs
+public sealed class AspireApi: ApiSpecification, IAsyncDisposable
 {
-    private readonly ApiSpecification<Program> API;
+    public static readonly OtlpReceiver Otlp = OtlpReceiver.Start(
+        new OtlpReceiverOptions { ForwardTo = TestRunCollector.Endpoint });
 
-    public CreateMeetingTests(ApiSpecification<Program> api) => API = api;
+    public static readonly AspireApp App = new(Otlp, withKafka: true);
 
-    [Fact]
-    public Task CreateCommand_ShouldPublish_MeetingCreateEvent() =>
-        API.Given()
-            .When(
-                POST, 
-                URI("/api/meetings/),
-                BODY(new CreateMeeting(Guid.NewGuid(), "Event Sourcing Workshop"))
-            )
-            .Then(CREATED);
-}
-```
-
-
-### Setting up data with `IAsyncLifetime`
-
-Sometimes you need to set up test data asynchronously (e.g. open a shopping cart before cancelling it). You might not want to pollute your tests code with test case setup or do more extended preparation. For that XUnit provides `IAsyncLifetime` interface. You can create a fixture derived from the `APISpecification` to benefit from built-in helpers and use it later in your tests.
-
-```csharp
-public class GetProductDetailsFixture: ApiSpecification<Program>, IAsyncLifetime
-{
-    public ProductDetails ExistingProduct = default!;
-
-    public GetProductDetailsFixture(): base(new WarehouseTestWebApplicationFactory()) { }
-
-    public async ValueTask InitializeAsync()
+    public AspireApi() : base(App.Api, spec => spec
+        .Telemetry(Otlp)
+        .Use(App.Kafka)
+        .Deadline(TimeSpan.FromSeconds(30)))
     {
-        var registerProduct = new RegisterProductRequest("IN11111", "ValidName", "ValidDescription");
-        var productId = await Given()
-            .When(POST, URI("/api/products"), BODY(registerProduct))
-            .Then(CREATED)
-            .GetCreatedId<Guid>();
-
-        var (sku, name, description) = registerProduct;
-        ExistingProduct = new ProductDetails(productId, sku!, name!, description);
     }
+```
+<sup><a href='/src/dotnet/Ogooreck.Aspire.Tests/Fixtures/AspireApi.cs#L5-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-AspireSpecification' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-    public ValueTask DisposeAsync()
-    {
-        Dispose();
-        return ValueTask.CompletedTask;
-    }
-}
-
-public class GetProductDetailsTests: IClassFixture<GetProductDetailsFixture>
+<!-- snippet: AspireTest -->
+<a id='snippet-AspireTest'></a>
+```cs
+[Fact]
+public async Task PlacingAnOrder_ExportsTheRequestSpanOverOtlp()
 {
-    private readonly GetProductDetailsFixture API;
+    var cartId = Guid.NewGuid();
 
-    public GetProductDetailsTests(GetProductDetailsFixture api) => API = api;
-
-    [Fact]
-    public Task ValidRequest_With_NoParams_ShouldReturn_200() =>
-        API.Given()
-            .When(GET, URI($"/api/products/{API.ExistingProduct.Id}"))
-            .Then(OK, RESPONSE_BODY(API.ExistingProduct));
-
-    [Theory]
-    [InlineData(12)]
-    [InlineData("not-a-guid")]
-    public Task InvalidGuidId_ShouldReturn_404(object invalidId) =>
-        API.Given()
-            .When(GET, URI($"/api/products/{invalidId}"))
-            .Then(NOT_FOUND);
-
-    [Fact]
-    public Task NotExistingId_ShouldReturn_404() =>
-        API.Given()
-            .When(GET, URI($"/api/products/{Guid.NewGuid()}"))
-            .Then(NOT_FOUND);
+    await api.Given(AddProduct(cartId, "socks"))
+        .When(PlaceOrder(cartId))
+        .Then([
+            ExpectResponse(Created),
+            ExpectTrace(Span("POST /carts/{id}/orders", Cart(cartId)))
+        ], Ct);
 }
 ```
+<sup><a href='/src/dotnet/Ogooreck.Aspire.Tests/AspireApiTests.cs#L19-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-AspireTest' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Over OTLP, data arrives in periodic exports, so an increase from a Given step can arrive after the When step's baseline. Tag such metrics with something only the When step touches, or start the receiver with `WaitForMetricsExport = true`, which waits for the next export before the baseline and before each check. Other processes may export to the receiver too: when Aspire starts the app with `dotnet run`, the .NET 11 SDK's `dotnet` CLI reads the same `OTEL_*` variables and sends its own metrics. The receiver waits for each process that is exporting, so they don't hide the app's export; set `ServiceName` to the app's `service.name` to wait only for the app.
+
+### Other test frameworks and F#
+
+Ogooreck throws its own `AssertionException`, so it works with any test framework, for example NUnit:
+
+<!-- snippet: NUnitTest -->
+<a id='snippet-NUnitTest'></a>
+```cs
+[Test]
+public async Task RegisteringAProduct_RespondsWithCreated()
+{
+    var ct = TestContext.CurrentContext.CancellationToken;
+    await using var api = For<Program>();
+
+    await api.Given()
+        .When(Request(client => client.PostAsJsonAsync("/api/products",
+            new RegisterProductRequest($"nunit-{Guid.NewGuid()}", "Ogooreck"),
+            ct)))
+        .Then([ExpectResponse(Created)], ct);
+}
+```
+<sup><a href='/src/dotnet/Ogooreck.NUnit.Tests/ProductTests.cs#L11-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-NUnitTest' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+From F#, open `Ogooreck.API.ApiSpecification` as a type:
+
+<!-- snippet: FSharpApiTest -->
+<a id='snippet-FSharpApiTest'></a>
+```fs
+[<Fact>]
+let ``placing an order publishes OrderPlaced`` () =
+    task {
+        use shop = new Shop()
+        let cartId = Guid.NewGuid()
+
+        do!
+            shop
+                .Given(addProduct cartId "socks")
+                .When(placeOrder cartId)
+                .Then(
+                    [| ExpectResponse(HttpStatusCode.Created)
+                       ExpectPublished(
+                           OrderPlaced(
+                               cartId,
+                               Total = 5m,
+                               Products = [ "socks" ]
+                           )
+                       ) |],
+                    TestContext.Current.CancellationToken
+                )
+    }
+```
+<sup><a href='/src/dotnet/Ogooreck.Wolverine.FSharp.Tests/PlacingAnOrderTests.fs#L11-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-FSharpApiTest' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+## Exporting the traces of tests
+
+Ogooreck traces each test with the `Ogooreck` `ActivitySource`: a `Ogooreck Given/When/Then` span with the test's method, file and line, and below it `Before` (starting the app and its plugins), each step with its catch-up, and `Then` with each expectation. Each step's span carries the trace id of the requests it sent, so you can follow the step into the app's spans. The `Ogooreck` meter records how long runs, app starts, steps, catch-ups and expectations take.
+
+To see those spans next to the app's, export them from the test project with OpenTelemetry to any OTLP backend, such as the Aspire dashboard, Jaeger or an OpenTelemetry Collector. This repository's test projects start the export only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set:
+
+<!-- snippet: TestTelemetryExport -->
+<a id='snippet-TestTelemetryExport'></a>
+```cs
+[ModuleInitializer]
+internal static void StartWhenAnEndpointIsSet()
+{
+    var endpoint =
+        Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
+    if (string.IsNullOrEmpty(endpoint))
+        return;
+
+    var resource = ResourceBuilder.CreateDefault()
+        .AddService(typeof(TestTelemetryExport).Assembly.GetName().Name!);
+    traces = Sdk.CreateTracerProviderBuilder()
+        .SetResourceBuilder(resource)
+        .AddSource("*")
+        .AddOtlpExporter(options =>
+        {
+            options.ExportProcessorType = ExportProcessorType.Batch;
+            options.BatchExportProcessorOptions.ScheduledDelayMilliseconds = 50;
+            options.BatchExportProcessorOptions.MaxQueueSize = 65536;
+        })
+        .Build();
+    metrics = Sdk.CreateMeterProviderBuilder()
+        .SetResourceBuilder(resource)
+        .AddMeter("Ogooreck")
+        .AddOtlpExporter((_, reader) => reader
+            .PeriodicExportingMetricReaderOptions
+            .ExportIntervalMilliseconds = 1000)
+        .Build();
+    AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+    {
+        metrics?.Dispose();
+        traces?.Dispose();
+    };
+}
+```
+<sup><a href='/src/dotnet/Shared/TestTelemetryExport.cs#L14-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-TestTelemetryExport' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Use the Batch processor, as above. With the Simple processor, the exporter sends spans in the flow of the test, so its own HTTP calls to the endpoint show up under the test's spans.
+
+In CI, run an OpenTelemetry Collector that writes the spans to a file, and upload the file when a run fails. This repository's .NET workflow does that with this config:
+
+<!-- snippet: .github/otel-collector.yaml -->
+<a id='snippet-.github/otel-collector.yaml'></a>
+```yaml
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+exporters:
+  file:
+    path: /spans/spans.pb
+    format: proto
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [file]
+```
+<sup><a href='#snippet-.github/otel-collector.yaml' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Download the file of a failed run with `gh run download <run id> --name spans`, and read it with the MCP server's `ogooreck_import_spans` tool.
+
+## MCP server
+
+`Ogooreck.Mcp` is an [MCP](https://modelcontextprotocol.io) server that runs .NET tests for coding agents and explains each failure with the spans of the test, Ogooreck and the tested app. Install it as a dotnet tool:
+
+```shell
+dotnet tool install --global Ogooreck.Mcp
+```
+
+Then add it to your agent's config, for example `.mcp.json` for Claude Code:
+
+```json
+{
+  "mcpServers": {
+    "ogooreck": { "command": "ogooreck-mcp" }
+  }
+}
+```
+
+The same for Codex in `.codex/config.toml`:
+
+```toml
+[mcp_servers.ogooreck]
+command = "ogooreck-mcp"
+```
+
+And for OpenCode in `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "ogooreck": { "type": "local", "command": ["ogooreck-mcp"], "enabled": true }
+  }
+}
+```
+
+The server sets `OTEL_EXPORTER_OTLP_ENDPOINT` for the test run and receives the spans, so the test project needs an export like the [one above](#exporting-the-traces-of-tests). Its tools:
+
+| Tool | What it does |
+|---|---|
+| `ogooreck_test_run` | Runs a test project, with extra arguments such as a filter. Returns the counts and each failed test with its message and the file and line of its When step. `repeat` runs it until the first failure, for a flaky test; `hangTimeout` aborts a hanging run and names the test and the spans that never ended. |
+| `ogooreck_test_spans` | The span tree of a test: Before, Given, When and Then with their catch-ups and expectations, and the app's spans under them. |
+| `ogooreck_scenario_diagram` | A Mermaid sequence diagram of a test's steps and the messages they caused, one per test process, so a test run on two frameworks gets two. |
+| `ogooreck_find_spans` | Searches the spans by name, error or attribute. |
+| `ogooreck_concurrent_spans` | What else ran during a span, also in other tests, for races. |
+| `ogooreck_slowest_steps` | The slowest steps, catch-ups, app starts and expectations. |
+| `ogooreck_export_spans` | Writes all spans to a JSON file. |
+| `ogooreck_import_spans` | Reads the spans of a CI run from the Collector's file, for the other tools. |
+
+## Agent skill
+
+The Ogooreck package ships an [agent skill](https://agentskills.io), `skills/ogooreck-api-tests/SKILL.md`, that teaches coding agents how to write and debug Ogooreck tests, with the examples from this README. `dotnet restore` puts it in the NuGet cache next to the package, matching the version you use. NuGet's [`dotnet-package-skills`](https://github.com/NuGet/Client.Tools/tree/main/dotnet-package-skills) tool copies the skills of your project's packages to where agents read them:
+
+```shell
+dotnet tool install --global dotnet-package-skills --prerelease
+dotnet-package-skills install --destination .claude/skills
+dotnet-package-skills install
+```
+
+The first `install` is for Claude Code, which reads `.claude/skills`; the second copies to `.agents/skills`, which Codex and OpenCode read. After you upgrade Ogooreck, run `install` again to replace the copies with the new version's skill, and `dotnet-package-skills uninstall --stale` removes the skills of packages the project no longer references. The tool reads the project's direct package references, so run it in the test project that references Ogooreck.
 
 ## Credits
 

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
         <OutputType>Exe</OutputType>
         <IsPackable>false</IsPackable>
     </PropertyGroup>
@@ -18,6 +18,11 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Ogooreck.Mcp\Ogooreck.Mcp.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Ogooreck.Mcp.Fixture\Ogooreck.Mcp.Fixture.csproj;..\Ogooreck.TUnit.Tests\Ogooreck.TUnit.Tests.csproj;..\Ogooreck.Wolverine.Tests\Ogooreck.Wolverine.Tests.csproj;..\Ogooreck.Wolverine.FSharp.Tests\Ogooreck.Wolverine.FSharp.Tests.fsproj"
+                          ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" GlobalPropertiesToRemove="TargetFramework" />
     </ItemGroup>
 
 </Project>

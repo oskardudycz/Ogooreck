@@ -29,7 +29,7 @@ The quickest start is the **dev container**. It ships with the .NET SDK, the rec
 1. Install [Docker](https://docs.docker.com/engine/install/) and [VS Code](https://code.visualstudio.com/) with the **Dev Containers** extension.
 2. Open the repo and run **Dev Containers: Reopen in Container**, then pick **ogooreck-dotnet**.
 
-To work on your own machine instead, install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Then build and test from the package:
+To work on your own machine instead, install the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) and the [ASP.NET Core 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0): the packages target .NET 10 and 11. `./build.sh test` runs the tests on .NET 11, and CI runs them on both. Then build and test from the package:
 
 ```shell
 cd src/dotnet
@@ -43,12 +43,14 @@ On Windows, use `build.cmd` or `build.ps1` instead of `build.sh`.
 All from [`src/dotnet`](./src/dotnet):
 
 ```shell
-./build.sh test                      # verify formatting, compile and run all tests, as CI does
+./build.sh test                      # verify formatting, compile and run all tests on .NET 11
+./build.sh test --framework net10.0  # the same on .NET 10; CI runs both, in parallel jobs
 dotnet build Ogooreck.slnx           # compile only - the fast inner loop
 dotnet test Ogooreck.slnx            # run the tests
 dotnet format Ogooreck.slnx          # format C# by hand, if you ever need to
 dotnet fantomas .                    # format F# by hand, if you ever need to
 ./build.sh pack                      # build the NuGet package into artifacts/
+./build.sh test-skill                # pack, then install the package's skill with dotnet-package-skills, as CI does
 ./build.sh docs                      # regenerate README.md from mdsource/
 ```
 
@@ -159,7 +161,7 @@ The `README.md` is generated. Its code samples come from the sample tests throug
 
 ### 100% line and branch coverage
 
-`./build.sh test` requires 100% line and branch coverage of the `Ogooreck`, `Ogooreck.Wolverine`, `Ogooreck.Marten`, `Ogooreck.Kafka` and `Ogooreck.RabbitMQ` libraries and of the `Ogooreck.Mcp` server, collected by [coverlet](https://github.com/coverlet-coverage/coverlet) from all test projects and merged, and the build program checks the result in [`Program.cs`](./src/dotnet/Ogooreck.Build/Program.cs). This does more than confirm the tests run the code they're meant to. It also surfaces code no test can reach. A branch you can't cover is often one that can't execute: a null check on a value that's never null, or a `default` case the type already rules out. When that's the case, the better fix is usually to remove the branch, not to write a test that only satisfies the check. So treat a coverage gap as a question about the code first, and the test second.
+`./build.sh test` requires 100% line and branch coverage of the `Ogooreck`, `Ogooreck.Wolverine`, `Ogooreck.Marten`, `Ogooreck.Kafka` and `Ogooreck.RabbitMQ` libraries and of the `Ogooreck.Mcp` server, each from its own test projects: `Ogooreck` from `Ogooreck.Tests`, `Ogooreck.Api.Tests`, `Ogooreck.BusinessLogic.Tests`, `Ogooreck.BusinessLogic.FSharp.Tests`, `Ogooreck.NUnit.Tests`, `Ogooreck.MSTest.Tests` and `Ogooreck.Aspire.Tests`, `Ogooreck.Wolverine` from `Ogooreck.Wolverine.Tests` and `Ogooreck.Wolverine.FSharp.Tests`, and each other library from the test project of the same name. A plug library's tests don't count for `Ogooreck`, so a library can't rely on another's tests. [coverlet](https://github.com/coverlet-coverage/coverlet) collects the coverage, and the build program checks the result in [`Program.cs`](./src/dotnet/Ogooreck.Build/Program.cs). This does more than confirm the tests run the code they're meant to. It also surfaces code no test can reach. A branch you can't cover is often one that can't execute: a null check on a value that's never null, or a `default` case the type already rules out. When that's the case, the better fix is usually to remove the branch, not to write a test that only satisfies the check. So treat a coverage gap as a question about the code first, and the test second.
 
 We reach the coverage from the outside in. Tests drive the public API the same way calling code does: `Spec.Given(...).When(...).Then(...)`. The internals are covered because real usage runs through them, not because a test reaches into an internal method. Tests written this way survive refactors and read as examples of the API. [`BankAccountTests`](./src/dotnet/Ogooreck.BusinessLogic.Tests/Deciders/BankAccountTests.cs) is a good place to start for business logic, and [`CausationTests`](./src/dotnet/Ogooreck.Api.Tests/API/Messages/CausationTests.cs) for API specifications.
 

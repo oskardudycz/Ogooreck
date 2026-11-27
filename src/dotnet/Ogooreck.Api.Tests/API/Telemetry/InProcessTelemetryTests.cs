@@ -27,6 +27,21 @@ public class InProcessTelemetryTests: IDisposable
     }
 
     [Fact]
+    public async Task ExpectTrace_SeesASpanStartedWithAStringParentId()
+    {
+        await using var spec = Specification();
+
+        await spec
+            .Given()
+            .When(Action(ctx =>
+            {
+                using var span = activities.StartActivity("parented by id", ActivityKind.Internal, ctx.Traceparent);
+                return Task.CompletedTask;
+            }))
+            .Then([ExpectTrace(Span("parented by id"))], TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task Values_AreStringsLikeJavaStringValueOf_WhateverTheCultureOfTheRecordingThread()
     {
         var counter = meter.CreateCounter<int>($"culture.{suffix}");

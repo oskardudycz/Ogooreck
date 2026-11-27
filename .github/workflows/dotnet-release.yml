@@ -28,7 +28,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v6.1.0
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Resolve version
         id: version
@@ -39,9 +41,9 @@ jobs:
             echo "version=${GITHUB_REF_NAME#dotnet-}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Pack
+      - name: Pack and install the skill of the packed Ogooreck with dotnet-package-skills
         working-directory: src/dotnet
-        run: ./build.sh --no-color pack
+        run: ./build.sh --no-color test-skill
         env:
           Version: ${{ steps.version.outputs.version }}
 

@@ -16,6 +16,8 @@ public class AspireApiTests(AspireApi api)
 
     private static Dictionary<string, string> Cart(Guid cartId) => new() { ["cart.id"] = cartId.ToString() };
 
+    #region AspireTest
+
     [Fact]
     public async Task PlacingAnOrder_ExportsTheRequestSpanOverOtlp()
     {
@@ -23,8 +25,13 @@ public class AspireApiTests(AspireApi api)
 
         await api.Given(AddProduct(cartId, "socks"))
             .When(PlaceOrder(cartId))
-            .Then([ExpectResponse(Created), ExpectTrace(Span("POST /carts/{id}/orders", Cart(cartId)))], Ct);
+            .Then([
+                ExpectResponse(Created),
+                ExpectTrace(Span("POST /carts/{id}/orders", Cart(cartId)))
+            ], Ct);
     }
+
+    #endregion
 
     [Fact]
     public async Task SpanAttributes_ArriveOverOtlpAsStrings_UnderPolishCulture()

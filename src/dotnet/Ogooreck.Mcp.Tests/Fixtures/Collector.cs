@@ -30,7 +30,17 @@ internal static class Collector
               exporters: [file]
         """;
 
-    public static async Task<byte[]> SpansOfAFixtureRun(params string[] arguments)
+    public static async Task<byte[]> SpansOfAFixtureRunAnd(string otlpJson) =>
+        await SpansWritten(async (endpoint, ct) =>
+        {
+            await RunTheFixture(endpoint, ct);
+            using var http = new HttpClient();
+            using var exported = await http.PostAsync(new Uri(endpoint, "/v1/traces"),
+                new StringContent(otlpJson, Encoding.UTF8, "application/json"), ct);
+            exported.EnsureSuccessStatusCode();
+        });
+
+    private static async Task<byte[]> SpansWritten(Func<Uri, CancellationToken, Task> export)
     {
         var ct = TestContext.Current.CancellationToken;
         await using var collector = new ContainerBuilder(Image)
@@ -41,15 +51,15 @@ internal static class Collector
             .Build();
         await collector.StartAsync(ct);
 
-        await RunTheFixture(new Uri($"http://{collector.Hostname}:{collector.GetMappedPublicPort(OtlpHttp)}"), arguments, ct);
+        await export(new Uri($"http://{collector.Hostname}:{collector.GetMappedPublicPort(OtlpHttp)}"), ct);
 
         await collector.StopAsync(ct);
         return await collector.ReadFileAsync(SpansFile, ct);
     }
 
-    private static async Task RunTheFixture(Uri endpoint, string[] arguments, CancellationToken ct)
+    private static async Task RunTheFixture(Uri endpoint, CancellationToken ct)
     {
-        using var process = Process.Start(new ProcessStartInfo("dotnet", ["test", Fixture, .. arguments])
+        using var process = Process.Start(new ProcessStartInfo("dotnet", ["test", Fixture, "--no-build"])
         {
             WorkingDirectory = SourceDirectory,
             RedirectStandardOutput = true,

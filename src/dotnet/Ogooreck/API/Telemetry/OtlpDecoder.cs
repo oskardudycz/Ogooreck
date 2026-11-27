@@ -22,6 +22,15 @@ internal static class OtlpDecoder
         return measurements;
     }
 
+    public static List<(string? Service, string? Instance)> Senders(byte[] request) =>
+        FieldsOf(request, 1).Select(resourceMetrics =>
+        {
+            var attributes = new Dictionary<string, string>();
+            foreach (var attribute in FieldsOf(resourceMetrics, 1).SelectMany(resource => FieldsOf(resource, 1)))
+                AddAttribute(attribute, attributes);
+            return (attributes.GetValueOrDefault("service.name"), attributes.GetValueOrDefault("service.instance.id"));
+        }).ToList();
+
     private static IEnumerable<byte[]> ScopesOf(byte[] request) =>
         FieldsOf(request, 1).SelectMany(resource => FieldsOf(resource, 2));
 

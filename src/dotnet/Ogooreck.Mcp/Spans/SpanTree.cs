@@ -16,7 +16,7 @@ internal sealed class SpanTree
         byId = spans.GroupBy(span => span.SpanId).ToDictionary(group => group.Key, group => group.First());
         childrenOf = spans.Where(span => span.ParentSpanId is not null).ToLookup(span => span.ParentSpanId!);
         stepsOfAppTrace = spans.Where(span => span.Attributes.ContainsKey(StepTraceId))
-            .ToLookup(span => span.Attributes[StepTraceId]);
+            .ToLookup(span => span.Attribute(StepTraceId)!);
     }
 
     public IReadOnlyList<CollectedSpan> Spans { get; }
@@ -29,7 +29,7 @@ internal sealed class SpanTree
     public IEnumerable<CollectedSpan> ChildrenOf(CollectedSpan span) => childrenOf[span.SpanId];
 
     public IEnumerable<CollectedSpan> AppRootsOf(CollectedSpan step) =>
-        step.Attributes.TryGetValue(StepTraceId, out var traceId)
+        step.Attribute(StepTraceId) is { } traceId
             ? Spans.Where(span => span.TraceId == traceId && Parent(span) is null).OrderBy(span => span.Start)
             : [];
 
@@ -38,7 +38,7 @@ internal sealed class SpanTree
             .OrderBy(span => span.Start);
 
     public IEnumerable<CollectedSpan> AppSpansOf(CollectedSpan step) =>
-        Spans.Where(span => span.TraceId == step.Attributes[StepTraceId]).OrderBy(span => span.Start);
+        Spans.Where(span => span.TraceId == step.Attribute(StepTraceId)).OrderBy(span => span.Start);
 
     public IEnumerable<CollectedSpan> AncestorsOf(CollectedSpan span)
     {
@@ -76,7 +76,7 @@ internal sealed class SpanTree
         return [.. path];
     }
 
-    public static string? TestOf(CollectedSpan? run) => run?.Attributes.GetValueOrDefault("code.function.name");
+    public static string? TestOf(CollectedSpan? run) => run?.Attribute("code.function.name");
 
     private CollectedSpan? Parent(CollectedSpan span) =>
         span.ParentSpanId is not null && byId.TryGetValue(span.ParentSpanId, out var parent) ? parent : null;

@@ -8,6 +8,8 @@ namespace Ogooreck.NUnit.Tests;
 
 public class ProductTests
 {
+    #region NUnitTest
+
     [Test]
     public async Task RegisteringAProduct_RespondsWithCreated()
     {
@@ -16,9 +18,12 @@ public class ProductTests
 
         await api.Given()
             .When(Request(client => client.PostAsJsonAsync("/api/products",
-                new RegisterProductRequest($"nunit-{Guid.NewGuid()}", "Ogooreck"), ct)))
+                new RegisterProductRequest($"nunit-{Guid.NewGuid()}", "Ogooreck"),
+                ct)))
             .Then([ExpectResponse(Created)], ct);
     }
+
+    #endregion
 
     [Test]
     public async Task ExpectingTheWrongStatus_FailsWithOgooreckMessageAsAPlainException()

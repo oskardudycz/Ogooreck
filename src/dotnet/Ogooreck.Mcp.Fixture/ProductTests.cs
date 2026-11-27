@@ -46,8 +46,9 @@ public class ProductTests
     public void WritingSpansOfItsOwn()
     {
         using var activity = OwnSpans.StartActivity("own work");
-        activity?.SetTag("own.done", true).SetTag("own.retried", false).SetTag("own.ratio", 0.5)
-            .SetTag("own.labels", new[] { "first", "second" }).SetStatus(ActivityStatusCode.Ok);
+        activity?.SetTag("own.done", true).SetTag("own.retried", false).SetTag("own.ratio", 0.5).SetTag("own.unknown", double.NaN)
+            .SetTag("own.labels", new[] { "first", "second" }).SetTag("own.attempts", new[] { 1, 2 })
+            .SetStatus(ActivityStatusCode.Ok);
     }
 
     private static readonly ActivitySource OwnSpans = new("Ogooreck.Mcp.Fixture");

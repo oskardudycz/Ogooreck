@@ -86,6 +86,21 @@ public class DecorationTests
     }
 
     [Fact]
+    public void decorate_decoratesTheUnkeyedRegistration_andLeavesKeyedOnesAlone()
+    {
+        var services = new ServiceCollection()
+            .AddSingleton<IGreeter, Greeter>()
+            .AddKeyedSingleton<IGreeter, Greeter>("quiet")
+            .AddSingleton(new Prefix("Hi"));
+
+        services.Decorate<IGreeter>(inner => new Loud(inner));
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal("HELLO ANN", provider.GetRequiredService<IGreeter>().Greet("Ann"));
+        Assert.Equal("Hello Ann", provider.GetRequiredKeyedService<IGreeter>("quiet").Greet("Ann"));
+    }
+
+    [Fact]
     public void decorate_wrapsAnInstanceAFactoryAndATypeRegistration_keepingTheLifetime()
     {
         var instance = new ServiceCollection().AddSingleton<IGreeter>(new Greeter());

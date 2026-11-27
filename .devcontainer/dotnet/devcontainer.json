@@ -1,7 +1,11 @@
 {
   "name": "ogooreck-dotnet",
-  "image": "mcr.microsoft.com/devcontainers/dotnet:10.0",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:11.0",
   "features": {
+    "ghcr.io/devcontainers/features/dotnet:2": {
+      "version": "none",
+      "aspNetCoreRuntimeVersions": "10.0"
+    },
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "moby": false
     }

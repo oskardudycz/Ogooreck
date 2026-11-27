@@ -21,10 +21,10 @@ public sealed class SourceFiles
 
     public string Location(CollectedSpan span)
     {
-        var path = span.Attributes["code.file.path"];
+        var path = span.Attribute("code.file.path")!;
         var local = path.StartsWith(DeterministicRoot, StringComparison.Ordinal)
             ? Path.Combine(Root, path[DeterministicRoot.Length..])
             : path;
-        return $"{Path.GetRelativePath(Root, local)}:{span.Attributes["code.line.number"]}";
+        return $"{Path.GetRelativePath(Root, local)}:{span.Attribute("code.line.number")}";
     }
 }

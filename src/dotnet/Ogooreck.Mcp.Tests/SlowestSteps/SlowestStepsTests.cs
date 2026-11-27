@@ -7,13 +7,12 @@ using static Ogooreck.Mcp.Tests.Fixtures.ToolResults;
 
 namespace Ogooreck.Mcp.Tests.SlowestSteps;
 
-[Collection(BuildsTheFixture)]
-public class SlowestStepsTests(McpServer server): IClassFixture<McpServer>
+public class SlowestStepsTests(SharedRuns runs)
 {
     [Fact]
     public async Task SlowestSteps_NameTheTestAndTheLineOfEachStep()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
 
         var steps = Structured<SlowSteps>(await server.Call("ogooreck_slowest_steps", new() { ["top"] = 50 }));
 
@@ -25,7 +24,7 @@ public class SlowestStepsTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task SlowestSteps_ShowTheSpansDownToTheDepth()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
 
         var steps = Structured<SlowSteps>(await server.Call("ogooreck_slowest_steps", new() { ["top"] = 50, ["depth"] = 1 }));
 
@@ -36,7 +35,7 @@ public class SlowestStepsTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task SlowestSteps_WithAFilename_WriteTheStepsToTheFileInsteadOfTheResponse()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
         var file = server.FileIn("steps.json");
 
         var steps = Structured<SlowSteps>(await server.Call("ogooreck_slowest_steps", new() { ["filename"] = file }));

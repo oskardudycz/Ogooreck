@@ -2,8 +2,8 @@ namespace Ogooreck.Mcp.Tests.Fixtures;
 
 internal static class Sources
 {
-    public const string BuildsTheFixture = "Builds Ogooreck.Mcp.Fixture";
     public const string Fixture = "Ogooreck.Mcp.Fixture";
+    public const string TestingPlatformProject = "Ogooreck.TUnit.Tests";
     public const string FailingTest = "Ogooreck.Mcp.Fixture.ProductTests.RegisteringAProduct_RespondsWithOk";
     public const string HangingTest = "Ogooreck.Mcp.Fixture.ProductTests.WaitingForAResponseThatNeverComes";
     public const string FailingWhen = "src/dotnet/Ogooreck.Mcp.Fixture/ProductTests.cs:28";

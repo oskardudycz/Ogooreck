@@ -5,15 +5,12 @@ using static Ogooreck.Mcp.Tests.Fixtures.ToolResults;
 
 namespace Ogooreck.Mcp.Tests.ImportingSpans;
 
-[Collection(BuildsTheFixture)]
-public class ImportSpansTests(McpServer server): IClassFixture<McpServer>
+public class ImportSpansTests(McpServer server, CollectedFile collected): IClassFixture<McpServer>, IClassFixture<CollectedFile>
 {
     [Fact]
     public async Task ImportSpans_FromTheFileOfACollector_GivesTheOtherToolsTheSpansOfThatRun()
     {
-        var file = server.FileIn("collected.pb");
-        await File.WriteAllBytesAsync(file,
-            await Collector.SpansOfAFixtureRun("--filter", "FullyQualifiedName~RespondsWithOk"), TestContext.Current.CancellationToken);
+        var file = collected.Path;
 
         var imported = await server.Call("ogooreck_import_spans", new() { ["path"] = file });
 
@@ -23,6 +20,27 @@ public class ImportSpansTests(McpServer server): IClassFixture<McpServer>
         Assert.Equal(FailingTest, test.Test);
         Assert.Equal(FailingWhen, test.Location);
         Assert.NotNull(test.Run.Error);
+    }
+
+    [Fact]
+    public async Task ImportSpans_KeepArrayAttributes()
+    {
+        await server.Call("ogooreck_import_spans", new() { ["path"] = collected.Path });
+
+        var own = Assert.Single(await server.TestRunSpans(), span => span.Name == "own work" && span.Scope == Fixture);
+        Assert.Equal("""["first","second"]""", own.Attributes["own.labels"].ToJsonString());
+        Assert.Equal("[1,2]", own.Attributes["own.attempts"].ToJsonString());
+    }
+
+    [Fact]
+    public async Task ImportSpans_SkipAttributesWhoseTypeTheyCannotShow_AndKeepTheRest()
+    {
+        await server.Call("ogooreck_import_spans", new() { ["path"] = collected.Path });
+
+        var span = Assert.Single(await server.TestRunSpans(), span => span.Name == "own map work");
+        Assert.Equal("", span.Service);
+        Assert.DoesNotContain("own.map", span.Attributes.Keys);
+        Assert.Equal("kept", span.Attribute("own.name"));
     }
 
     [Fact]

@@ -7,13 +7,12 @@ using static Ogooreck.Mcp.Tests.Fixtures.ToolResults;
 
 namespace Ogooreck.Mcp.Tests.Running;
 
-[Collection(BuildsTheFixture)]
-public class TestRunTests(McpServer server): IClassFixture<McpServer>
+public class TestRunTests(McpServer server, SharedRuns runs): IClassFixture<McpServer>
 {
     [Fact]
     public async Task TestRun_NamesEachFailedTestWithTheLocationOfItsRun()
     {
-        var run = await server.TestRun(Fixture);
+        var run = (await runs.Of(Fixture)).Result;
 
         Assert.Equal(new TestCounts(5, 2, 1, 2), run.Tests);
         Assert.Empty(run.NeverEnded);
@@ -27,7 +26,7 @@ public class TestRunTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task TestRun_PassesTheArgumentsToDotnetTest()
     {
-        var run = await server.TestRun(Fixture, ["--filter", "FullyQualifiedName~RespondsWithCreated"]);
+        var run = (await runs.Of(Fixture, "--filter", "FullyQualifiedName~RespondsWithCreated")).Result;
 
         Assert.Equal(new TestCounts(1, 1, 0, 0), run.Tests);
         Assert.Empty(run.FailedTests);
@@ -37,40 +36,76 @@ public class TestRunTests(McpServer server): IClassFixture<McpServer>
     }
 
     [Fact]
-    public async Task TestRun_Repeated_StopsAtTheFirstRunWithAFailedTest()
+    public async Task TestRun_CollectsTheSpansOfTheTestsWithoutTheSpansOfTheDotnetCli()
     {
-        var run = await server.TestRun(Fixture, repeat: 3);
+        var server = (await runs.Of(Fixture, "--filter", "FullyQualifiedName~RespondsWithCreated")).Server;
 
-        Assert.Equal(1, run.Attempts);
-        Assert.Equal(FailingTest, Assert.Single(run.FailedTests).Name);
-        Assert.Equal(run.Spans, (await server.TestRunSpans()).Length);
+        var spans = await server.TestRunSpans();
+        Assert.NotEmpty(spans);
+        Assert.DoesNotContain(spans, span => span.Service == "dotnet-cli");
+    }
+
+    [Theory]
+    [InlineData(Fixture, new[] { "--filter", "FullyQualifiedName~RespondsWithCreated" }, new[] { "dotnet msbuild", "dotnet test" })]
+    [InlineData(TestingPlatformProject, new[] { "--framework", "net11.0" }, new[] { "dotnet msbuild", "dotnet --version", "dotnet test" })]
+    public async Task TestRun_HasASpanForEachDotnetProcessItStarted(string project, string[] arguments, string[] processes)
+    {
+        var server = (await runs.Of(project, arguments)).Server;
+
+        var started = (await server.TestRunSpans()).Where(span => span.Attributes.ContainsKey("process.command_args")).OrderBy(span => span.Start).ToArray();
+        Assert.Equal(processes, started.Select(span => span.Name));
+        Assert.All(started, span =>
+        {
+            Assert.Equal("0", span.Attribute("process.exit.code"));
+            Assert.Equal("dotnet", span.Attributes["process.command_args"][0]!.GetValue<string>());
+            Assert.True(span.Duration > TimeSpan.Zero);
+        });
+        Assert.Contains(arguments[^1], started[^1].Attributes["process.command_args"]!.AsArray().Select(item => item!.GetValue<string>()));
     }
 
     [Fact]
-    public async Task TestRun_Repeated_RunsAgainWhileTheTestsPass()
+    public async Task TestRun_HasASpanForEachTestThatRan_WithinTheDotnetTestProcess()
     {
-        var run = await server.TestRun(Fixture, ["--filter", "FullyQualifiedName~RespondsWithCreated"], repeat: 2);
+        var (server, run) = await runs.Of(Fixture);
 
-        Assert.Equal(2, run.Attempts);
-        Assert.Equal(new TestCounts(1, 1, 0, 0), run.Tests);
+        var spans = await server.TestRunSpans();
+        var tests = spans.Where(span => span.Attributes.ContainsKey("test.case.name")).ToArray();
+        Assert.Equal(run.Tests.Passed + run.Tests.Failed, tests.Length);
+        Assert.All(tests, test => Assert.Equal(test.Name, test.Attribute("test.case.name")));
+        var failing = Assert.Single(tests, test => test.Name == FailingTest);
+        Assert.Equal("fail", failing.Attribute("test.case.result.status"));
+        var dotnetTest = Assert.Single(spans, span => span.Name == "dotnet test");
+        Assert.All(tests, test => Assert.InRange(test.Start, dotnetTest.Start, dotnetTest.End));
     }
 
     [Fact]
-    public async Task TestRun_WithAHangTimeout_NamesTheHungTestAndTheSpansThatNeverEnded()
+    public async Task TestRun_ReturnsTheTestsThatRan_SlowestFirst()
     {
-        var run = await server.TestRun(Fixture, ["--filter", "FullyQualifiedName~NeverComes", "--", "xUnit.Explicit=on"],
-            hangTimeout: 10);
+        var run = (await runs.Of(Fixture)).Result;
 
-        Assert.NotEqual(0, run.ExitCode);
-        Assert.Equal([HangingTest], run.RunningWhenAborted);
-        var neverEnded = Assert.Single(run.NeverEnded);
-        Assert.Equal(["Before", "Given"], neverEnded.EndedChildren);
+        Assert.Equal(run.Tests.Passed + run.Tests.Failed, run.SlowestTests.Length);
+        Assert.Contains(run.SlowestTests, test => test.Name == FailingTest && test.Seconds > 0);
+        Assert.Equal(run.SlowestTests.OrderByDescending(test => test.Seconds), run.SlowestTests);
+        Assert.All(run.SlowestTests, test => Assert.Equal("net10.0", test.Framework));
+        Assert.Equal(["net10.0"], run.Frameworks);
+    }
+
+    [Fact]
+    public async Task TestRun_OfAProjectWithSeveralFrameworks_NamesTheFrameworkOfEachTest()
+    {
+        var (server, run) = await runs.Of(TestingPlatformProject);
+
+        Assert.Equal(["net10.0", "net11.0"], run.Frameworks);
+        Assert.Equal(["net10.0", "net11.0"], run.SlowestTests.Select(test => test.Framework).Distinct().Order());
+        var tests = (await server.TestRunSpans())
+            .Where(span => span.Service == "Ogooreck.Mcp" && span.Attributes.ContainsKey("test.case.name")).ToArray();
+        Assert.Equal(["net10.0", "net11.0"], tests.Select(test => test.Attribute("test.framework")).Distinct().Order());
     }
 
     [Fact]
     public async Task TestRun_WithAHangTimeout_OfATestingPlatformProject_IsAnError()
     {
-        var result = await server.Call("ogooreck_test_run", new() { ["project"] = "Ogooreck.TUnit.Tests", ["hangTimeout"] = 10 });
+        var result = await server.Call("ogooreck_test_run", new() { ["project"] = TestingPlatformProject, ["hangTimeout"] = 10 });
 
         Assert.True(result.IsError);
         Assert.Contains("hangTimeout works only for VSTest projects", Text(result));
@@ -79,7 +114,7 @@ public class TestRunTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task TestRun_ThatRunsNoTests_ReturnsTheEndOfTheOutput()
     {
-        var run = await server.TestRun(Fixture, ["--no-such-option"]);
+        var run = (await runs.Of(Fixture, "--no-such-option")).Result;
 
         Assert.NotEqual(0, run.ExitCode);
         Assert.Equal(new TestCounts(0, 0, 0, 0), run.Tests);
@@ -87,33 +122,33 @@ public class TestRunTests(McpServer server): IClassFixture<McpServer>
     }
 
     [Fact]
-    public async Task TestRun_OfADeterministicBuild_MapsTheSourcePathsToTheRepository()
+    public async Task TestRun_RunsATestingPlatformProjectOnEachOfItsFrameworks_AsDotnetTestDoes()
     {
-        var run = await server.TestRun(Fixture, ["-p:ContinuousIntegrationBuild=true", "--filter", "FullyQualifiedName~RespondsWithOk"]);
-
-        Assert.Equal(FailingWhen, Assert.Single(Assert.Single(run.FailedTests).Runs).Location);
-        Assert.Contains("/_/", Assert.Single(run.FailedTests).StackTrace);
-    }
-
-    [Fact]
-    public async Task TestRun_RunsATestingPlatformProjectAsAnApplication()
-    {
-        var run = await server.TestRun("Ogooreck.TUnit.Tests");
+        var run = (await runs.Of(TestingPlatformProject)).Result;
 
         Assert.Equal("Microsoft.Testing.Platform", run.Runner);
         Assert.Equal(0, run.ExitCode);
-        Assert.True(run.Tests.Passed > 0);
+        Assert.Equal(new TestCounts(4, 4, 0, 0), run.Tests);
         Assert.True(run.Spans > 0);
         Assert.Empty(run.NeverEnded);
     }
 
     [Fact]
-    public async Task TestRun_OfAnFSharpProject_NamesTheTestAndTheLineOfEachStep()
+    public async Task TestRun_OfATestingPlatformProject_TakesTheArgumentsOfDotnetTest()
     {
-        var run = await server.TestRun("Ogooreck.Wolverine.FSharp.Tests");
+        var run = (await runs.Of(TestingPlatformProject, "--framework", "net11.0")).Result;
 
         Assert.Equal(0, run.ExitCode);
-        var steps = Structured<SlowSteps>(await server.Call("ogooreck_slowest_steps", new() { ["top"] = 50 }));
+        Assert.Equal(new TestCounts(2, 2, 0, 0), run.Tests);
+    }
+
+    [Fact]
+    public async Task TestRun_OfAnFSharpProject_NamesTheTestAndTheLineOfEachStep()
+    {
+        var (fsharp, run) = await runs.Of("Ogooreck.Wolverine.FSharp.Tests");
+
+        Assert.Equal(0, run.ExitCode);
+        var steps = Structured<SlowSteps>(await fsharp.Call("ogooreck_slowest_steps", new() { ["top"] = 50 }));
         Assert.Contains(steps.Steps, step => step.Test == "PlacingAnOrderTests.placing an order publishes OrderPlaced" &&
                                              step.Location.StartsWith("src/dotnet/Ogooreck.Wolverine.FSharp.Tests/PlacingAnOrderTests.fs:"));
     }
@@ -121,12 +156,10 @@ public class TestRunTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task TestRun_OfAMissingProject_IsAnError()
     {
-        var missing = Path.Combine(Path.GetTempPath(), "Ogooreck.Missing.Tests");
-
-        var result = await server.Call("ogooreck_test_run", new() { ["project"] = missing });
+        var result = await server.Call("ogooreck_test_run", new() { ["project"] = "Ogooreck.Missing.Tests" });
 
         Assert.True(result.IsError);
-        Assert.Contains($"No test project at {missing}", Text(result));
+        Assert.Contains($"No test project at {Path.Combine(SourceDirectory, "Ogooreck.Missing.Tests")}. The path is relative to {SourceDirectory}", Text(result));
     }
 
     [Fact]

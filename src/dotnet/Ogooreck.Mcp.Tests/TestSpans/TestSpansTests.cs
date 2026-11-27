@@ -6,13 +6,12 @@ using static Ogooreck.Mcp.Tests.Fixtures.ToolResults;
 
 namespace Ogooreck.Mcp.Tests.TestSpans;
 
-[Collection(BuildsTheFixture)]
-public class TestSpansTests(McpServer server): IClassFixture<McpServer>
+public class TestSpansTests(SharedRuns runs)
 {
     [Fact]
     public async Task TestSpans_ShowTheRunOfTheTest_WithTheAppSpansOfItsRequestUnderTheStep()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
 
         var found = Structured<Mcp.TestSpans>(await server.Call("ogooreck_test_spans", new() { ["test"] = "respondswithok$" }));
 
@@ -32,7 +31,7 @@ public class TestSpansTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task TestSpans_WithAFilename_WriteTheRunsToTheFileInsteadOfTheResponse()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
         var file = server.FileIn("test-spans.json");
 
         var found = Structured<Mcp.TestSpans>(await server.Call("ogooreck_test_spans",

@@ -30,7 +30,13 @@ type TestTelemetryExport() =
                     .AddSource("*")
                     .AddOtlpExporter(fun options ->
                         options.ExportProcessorType <-
-                            ExportProcessorType.Simple)
+                            ExportProcessorType.Batch
+
+                        options.BatchExportProcessorOptions.ScheduledDelayMilliseconds <-
+                            50
+
+                        options.BatchExportProcessorOptions.MaxQueueSize <-
+                            65536)
                     .Build()
             )
         else

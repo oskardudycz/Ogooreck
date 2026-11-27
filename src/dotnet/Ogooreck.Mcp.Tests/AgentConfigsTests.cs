@@ -6,7 +6,6 @@ using static Ogooreck.Mcp.Tests.Fixtures.Sources;
 
 namespace Ogooreck.Mcp.Tests;
 
-[Collection(BuildsTheFixture)]
 public class AgentConfigsTests
 {
     private static readonly string Repository = Path.GetFullPath(Path.Combine(SourceDirectory, "..", ".."));

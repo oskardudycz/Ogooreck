@@ -6,13 +6,12 @@ using static Ogooreck.Mcp.Tests.Fixtures.ToolResults;
 
 namespace Ogooreck.Mcp.Tests.ConcurrentSpans;
 
-[Collection(BuildsTheFixture)]
-public class ConcurrentSpansTests(McpServer server): IClassFixture<McpServer>
+public class ConcurrentSpansTests(SharedRuns runs)
 {
     [Fact]
     public async Task ConcurrentSpans_ListWhatRanDuringTheSpan_WithItsTestAndLocation()
     {
-        await server.TestRun(Fixture, ["--filter", "FullyQualifiedName~RespondsWithOk"]);
+        var server = (await runs.Of(Fixture, "--filter", "FullyQualifiedName~RespondsWithOk")).Server;
 
         var found = Structured<Mcp.ConcurrentSpans>(await server.Call("ogooreck_concurrent_spans",
             new() { ["pattern"] = "^POST /api/products" }));
@@ -30,7 +29,7 @@ public class ConcurrentSpansTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task ConcurrentSpans_LeaveOutTheParentsAndTheSpansUnderTheSpan()
     {
-        await server.TestRun(Fixture, ["--filter", "FullyQualifiedName~RespondsWithOk"]);
+        var server = (await runs.Of(Fixture, "--filter", "FullyQualifiedName~RespondsWithOk")).Server;
 
         var found = Structured<Mcp.ConcurrentSpans>(await server.Call("ogooreck_concurrent_spans",
             new() { ["pattern"] = "^When request POST" }));
@@ -40,9 +39,22 @@ public class ConcurrentSpansTests(McpServer server): IClassFixture<McpServer>
     }
 
     [Fact]
+    public async Task ConcurrentSpans_OfAService_LeaveOutTheSpansOfOtherServices()
+    {
+        var server = (await runs.Of(Fixture, "--filter", "FullyQualifiedName~RespondsWithOk")).Server;
+
+        var found = Structured<Mcp.ConcurrentSpans>(await server.Call("ogooreck_concurrent_spans",
+            new() { ["pattern"] = "^When request POST", ["service"] = Fixture }));
+
+        Assert.NotEmpty(found.Spans);
+        Assert.All(found.Spans, span => Assert.Equal(Fixture, span.Service));
+        Assert.Equal(found.Total, found.Spans.Length);
+    }
+
+    [Fact]
     public async Task ConcurrentSpans_ReturnOnlyTheLimit_OrWriteThemToTheFile()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
         var file = server.FileIn("concurrent.json");
 
         var limited = Structured<Mcp.ConcurrentSpans>(await server.Call("ogooreck_concurrent_spans",
@@ -62,7 +74,7 @@ public class ConcurrentSpansTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task ConcurrentSpans_OfASpanOutsideOfAnOgooreckRun_HaveNoTestOrLocation()
     {
-        await server.TestRun(Fixture);
+        var server = (await runs.Of(Fixture)).Server;
 
         var found = Structured<Mcp.ConcurrentSpans>(await server.Call("ogooreck_concurrent_spans",
             new() { ["pattern"] = "^own work$" }));
@@ -75,7 +87,7 @@ public class ConcurrentSpansTests(McpServer server): IClassFixture<McpServer>
     [Fact]
     public async Task ConcurrentSpans_OfAPatternThatMatchesNoSpan_IsAnError()
     {
-        await server.TestRun(Fixture, ["--filter", "FullyQualifiedName~RespondsWithCreated"]);
+        var server = (await runs.Of(Fixture, "--filter", "FullyQualifiedName~RespondsWithCreated")).Server;
 
         var result = await server.Call("ogooreck_concurrent_spans", new() { ["pattern"] = "^no such span$" });
 

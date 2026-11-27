@@ -119,12 +119,25 @@ app.MapPost("/carts/{id}/products", (string id, AddProductRequest request) =>
     return Results.Ok(updated);
 });
 
-app.MapPost("/carts/{id}/confirmation", (string id) =>
+app.MapPut("/carts/{id}/confirmation", (string id, HttpRequest request) =>
 {
     if (!carts.TryGetValue(id, out var cart))
         return Results.NotFound(cartNotFound);
+    if (!MatchesVersion(request, cart))
+        return Results.StatusCode(StatusCodes.Status412PreconditionFailed);
 
     carts[id] = cart with { Status = CartStatus.Confirmed, Version = cart.Version + 1 };
+    return Results.NoContent();
+});
+
+app.MapDelete("/carts/{id}/products/{product}", (string id, string product, HttpRequest request) =>
+{
+    if (!carts.TryGetValue(id, out var cart))
+        return Results.NotFound(cartNotFound);
+    if (!MatchesVersion(request, cart))
+        return Results.StatusCode(StatusCodes.Status412PreconditionFailed);
+
+    carts[id] = cart with { Products = [.. cart.Products.Where(p => p != product)], Version = cart.Version + 1 };
     return Results.NoContent();
 });
 
@@ -133,7 +146,7 @@ app.MapGet("/carts/{id}", (string id, HttpResponse response) =>
     if (!carts.TryGetValue(id, out var cart))
         return Results.NotFound(cartNotFound);
 
-    response.Headers.ETag = $"W/\"{cart.Version}\"";
+    response.Headers.ETag = ETagOf(cart);
     response.Headers["X-Version"] = cart.Version.ToString();
     return Results.Ok(cart);
 });
@@ -210,6 +223,11 @@ void PublishOrderPlaced(string cartId, string correlationId)
         await OrderHandling.Of(cartId);
     });
 }
+
+static string ETagOf(Cart cart) => $"W/\"{cart.Version}\"";
+
+static bool MatchesVersion(HttpRequest request, Cart cart) =>
+    request.Headers.IfMatch.Count == 0 || request.Headers.IfMatch.Contains(ETagOf(cart));
 
 Order? PlaceOrder(string cartId, TimeProvider time)
 {

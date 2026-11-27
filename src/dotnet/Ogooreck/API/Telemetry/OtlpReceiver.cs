@@ -37,15 +37,20 @@ public sealed class OtlpReceiver: ITelemetrySource
 
     private readonly WebApplication app;
     private readonly Uri? forwardTo;
+    private readonly string? serviceName;
+    private readonly TimeProvider clock;
     private readonly object gate = new();
     private readonly List<(Recorded<RecordedSpan> Spans, Recorded<RecordedMeasurement> Measurements)> sinks = [];
+    private readonly Dictionary<string, Sender> senders = [];
     private TaskCompletionSource nextMetricsExport = NewExport();
 
-    private OtlpReceiver(WebApplication app, bool waitForMetricsExport, Uri? forwardTo)
+    private OtlpReceiver(WebApplication app, OtlpReceiverOptions options, TimeProvider clock)
     {
         this.app = app;
-        this.forwardTo = forwardTo;
-        WaitsForMetricsExport = waitForMetricsExport;
+        forwardTo = options.ForwardTo;
+        serviceName = options.ServiceName;
+        this.clock = clock;
+        WaitsForMetricsExport = options.WaitForMetricsExport;
         MapExports();
         app.Start();
         Endpoint = new Uri(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses
@@ -76,13 +81,15 @@ public sealed class OtlpReceiver: ITelemetrySource
     /// OtlpReceiver.Start(new OtlpReceiverOptions { WaitForMetricsExport = true })
     /// </code>
     /// </example>
-    public static OtlpReceiver Start(OtlpReceiverOptions options)
+    public static OtlpReceiver Start(OtlpReceiverOptions options) => Start(options, TimeProvider.System);
+
+    internal static OtlpReceiver Start(OtlpReceiverOptions options, TimeProvider clock)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         var app = builder.Build();
-        return new OtlpReceiver(app, options.WaitForMetricsExport, options.ForwardTo);
+        return new OtlpReceiver(app, options, clock);
     }
 
     /// <inheritdoc />
@@ -98,8 +105,10 @@ public sealed class OtlpReceiver: ITelemetrySource
     }
 
     /// <summary>
-    /// Returns at once, or with <see cref="OtlpReceiverOptions.WaitForMetricsExport"/> waits for two metrics exports to arrive.
+    /// Returns at once, or with <see cref="OtlpReceiverOptions.WaitForMetricsExport"/> waits for two metrics exports from each process that is exporting.
     /// The export that is in flight when it is called may have been read before the app's latest increment, so only the second one is certain to carry it.
+    /// A process is told apart by its <c>service.instance.id</c>, or its <c>service.name</c> without one. It is exporting when it sent two exports and the last one
+    /// came within twice the time between them; a process that stays silent longer is no longer waited for, and one seen only once isn't waited for.
     /// </summary>
     /// <example>
     /// <code>
@@ -111,12 +120,35 @@ public sealed class OtlpReceiver: ITelemetrySource
         if (!WaitsForMetricsExport)
             return;
 
-        for (var export = 0; export < 2; export++)
+        Dictionary<string, long> before;
+        lock (gate)
+            before = senders.ToDictionary(sender => sender.Key, sender => sender.Value.Exports);
+
+        while (true)
         {
             Task next;
+            TimeSpan? untilSilent;
             lock (gate)
+            {
                 next = nextMetricsExport.Task;
-            await next.WaitAsync(ct);
+                var now = clock.GetUtcNow();
+                var delivered = senders.Where(sender => sender.Value.Exports - before.GetValueOrDefault(sender.Key) >= 2)
+                    .Select(sender => sender.Key).ToHashSet();
+                var awaited = senders.Where(sender => !delivered.Contains(sender.Key))
+                    .Select(sender => sender.Value.SilentAt - now)
+                    .Where(remaining => remaining > TimeSpan.Zero).ToList();
+                if (delivered.Count > 0 && awaited.Count == 0)
+                    return;
+                untilSilent = awaited.Count > 0 ? awaited.Min() : null;
+            }
+
+            try
+            {
+                await next.WaitAsync(untilSilent ?? Timeout.InfiniteTimeSpan, clock, ct);
+            }
+            catch (TimeoutException)
+            {
+            }
         }
     }
 
@@ -158,8 +190,39 @@ public sealed class OtlpReceiver: ITelemetrySource
             foreach (var sink in Sinks())
                 foreach (var measurement in measurements)
                     sink.Measurements.Add(measurement);
+            CountExport(OtlpDecoder.Senders(bytes));
             SignalMetricsExport();
         }));
+    }
+
+    private void CountExport(List<(string? Service, string? Instance)> exporting)
+    {
+        var now = clock.GetUtcNow();
+        lock (gate)
+            foreach (var (service, instance) in exporting.Where(each => serviceName is null || each.Service == serviceName))
+            {
+                var key = instance ?? service ?? "";
+                if (!senders.TryGetValue(key, out var sender))
+                    senders[key] = sender = new Sender();
+                sender.Exported(now);
+            }
+    }
+
+    private sealed class Sender
+    {
+        private DateTimeOffset? last;
+
+        public long Exports { get; private set; }
+
+        public DateTimeOffset SilentAt { get; private set; } = DateTimeOffset.MinValue;
+
+        public void Exported(DateTimeOffset at)
+        {
+            if (last is { } previous)
+                SilentAt = at + 2 * (at - previous);
+            last = at;
+            Exports++;
+        }
     }
 
     private (Recorded<RecordedSpan> Spans, Recorded<RecordedMeasurement> Measurements)[] Sinks()

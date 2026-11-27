@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <VersionPrefix>0.10.0</VersionPrefix>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
         <GenerateAssemblyTitleAttribute>true</GenerateAssemblyTitleAttribute>
         <GenerateAssemblyDescriptionAttribute>true</GenerateAssemblyDescriptionAttribute>
         <GenerateAssemblyProductAttribute>true</GenerateAssemblyProductAttribute>
@@ -36,6 +36,39 @@
 
     <ItemGroup>
         <None Include="$(RepositoryRoot)README.md" Pack="true" PackagePath="\" />
+        <None Remove="skills/**" />
     </ItemGroup>
+
+    <Target Name="PackSkillsWithoutSnippetMarkers" BeforeTargets="_GetPackageFiles">
+        <ItemGroup>
+            <GeneratedSkill Include="skills/**/SKILL.md" />
+        </ItemGroup>
+        <WriteSkillsWithoutSnippetMarkers Skills="@(GeneratedSkill)" Destination="$(IntermediateOutputPath)skills/" />
+        <ItemGroup>
+            <None Include="$(IntermediateOutputPath)skills/**/SKILL.md" Pack="true" PackagePath="skills/" />
+        </ItemGroup>
+    </Target>
+
+    <UsingTask TaskName="WriteSkillsWithoutSnippetMarkers" TaskFactory="RoslynCodeTaskFactory"
+               AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <Skills ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+            <Destination Required="true" />
+        </ParameterGroup>
+        <Task>
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.Linq" />
+            <Code Type="Fragment" Language="cs"><![CDATA[
+                string[] markers = ["<!-- snippet:", "<!-- endSnippet", "<a id='snippet-", "<sup><a href="];
+                foreach (var skill in Skills)
+                {
+                    var target = Path.Combine(Destination, skill.GetMetadata("RecursiveDir"), "SKILL.md");
+                    Directory.CreateDirectory(Path.GetDirectoryName(target));
+                    File.WriteAllLines(target, File.ReadAllLines(skill.ItemSpec)
+                        .Where(line => !markers.Any(marker => line.StartsWith(marker))));
+                }
+            ]]></Code>
+        </Task>
+    </UsingTask>
 
 </Project>
