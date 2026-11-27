@@ -19,12 +19,11 @@ public sealed class SourceFiles
         return directory.FullName;
     }
 
-    public string Location(CollectedSpan span)
-    {
-        var path = span.Attribute("code.file.path")!;
-        var local = path.StartsWith(DeterministicRoot, StringComparison.Ordinal)
+    public string Location(CollectedSpan span) =>
+        $"{Relative(span.Attribute("code.file.path")!)}:{span.Attribute("code.line.number")}";
+
+    public string Relative(string path) =>
+        Path.GetRelativePath(Root, path.StartsWith(DeterministicRoot, StringComparison.Ordinal)
             ? Path.Combine(Root, path[DeterministicRoot.Length..])
-            : path;
-        return $"{Path.GetRelativePath(Root, local)}:{span.Attribute("code.line.number")}";
-    }
+            : path).Replace(Path.DirectorySeparatorChar, '/');
 }

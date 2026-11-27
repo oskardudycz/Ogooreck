@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Ogooreck.Mcp.Tests.Fixtures;
 
 internal static class Sources
@@ -7,6 +9,9 @@ internal static class Sources
     public const string FailingTest = "Ogooreck.Mcp.Fixture.ProductTests.RegisteringAProduct_RespondsWithOk";
     public const string HangingTest = "Ogooreck.Mcp.Fixture.ProductTests.WaitingForAResponseThatNeverComes";
     public const string FailingWhen = "src/dotnet/Ogooreck.Mcp.Fixture/ProductTests.cs:28";
+
+    public static readonly string Configuration =
+        typeof(Sources).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
 
     public static readonly string Server = Path.Combine(AppContext.BaseDirectory, "Ogooreck.Mcp.dll");
 

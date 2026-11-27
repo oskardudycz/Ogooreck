@@ -105,7 +105,7 @@ Measurements without a trace id (observable instruments, counters outside a requ
 ## When a test fails
 
 1. Read the failure message first. It names the step (`When request POST /carts/{id}/orders`), what was expected, what was found, and the response body or the numbered list of messages.
-2. If the MCP server is configured, run the test through `ogooreck_test_run` with a filter, then read its spans with `ogooreck_test_spans`, `ogooreck_find_spans` and `ogooreck_scenario_diagram`. For a slow test use `ogooreck_slowest_steps`; for a flaky test pass `repeat`; for a hanging test pass `hangTimeout`; for a race between tests use `ogooreck_concurrent_spans`; for a CI run use `ogooreck_import_spans` with the Collector's file.
+2. If the MCP server is configured, run the test through `ogooreck_test_run` with a filter, then read its spans with `ogooreck_test_spans`, `ogooreck_find_spans` and `ogooreck_scenario_diagram`. For a slow test use `ogooreck_slowest_steps`; for a flaky test pass `repeat`; for a hanging test pass `hangTimeout`; for a race between tests use `ogooreck_concurrent_spans`; for a CI run use `ogooreck_import_spans` with the Collector's file; to find code no test reaches, pass `coverage` with the library name.
 3. The spans come from the test project's OpenTelemetry export, started when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, with the Batch processor:
 
 snippet: TestTelemetryExport

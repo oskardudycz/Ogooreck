@@ -40,7 +40,7 @@ public class StoppingTestProcessesTests(McpServer server): IClassFixture<McpServ
             new Dictionary<string, object?>
             {
                 ["project"] = Fixture,
-                ["arguments"] = new[] { "--no-build", "--filter", "FullyQualifiedName~NeverComes", "--", "xUnit.Explicit=on" }
+                ["arguments"] = new[] { "--no-build", "--configuration", Configuration, "--filter", "FullyQualifiedName~NeverComes", "--", "xUnit.Explicit=on" }
             },
             cancellationToken: cancel.Token).AsTask();
         await Until(() => Process.GetProcessesByName(Fixture)
